@@ -29,7 +29,7 @@ impl Buffer {
         Buffer { lines: ropey::Rope::new(), 
                 filename: String::from("new-file.md"),
                 modified: false, saved: false, new : true,
-                offset: 2, cs: 0,
+                offset: 5, cs: 0,
                 cached_cx : 0,
         }
     }
