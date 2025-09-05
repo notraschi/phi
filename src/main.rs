@@ -22,6 +22,8 @@ use buffer::*;
 struct Editor {
     bufs : Vec<Buffer>,
     active_buf : usize,
+    mode : Mode,
+    alive : bool
 }
 
 #[allow(unused)]
@@ -36,20 +38,84 @@ impl Editor {
 
     fn save_as(&self, filename : &String) -> io::Result<()> {
 
-        self.bufs[self.active_buf].lines.write_to(
-            BufWriter::new(File::create(filename)?)
-        )?;
+        todo!();
+    }
+
+    fn write(&self)  -> io::Result<()> {
+
+        let buf = &self.bufs[self.active_buf];
+
+        let mut wr = BufWriter::new(File::create(&buf.filename)?);
+
+        buf.lines.write_to(&mut wr);
+        wr.flush();
+
         Ok(())
     }
 
-    fn write(&self) {
+    fn command(&self) {
 
-        if self.bufs[self.active_buf].new {
-            self.save_as(&self.bufs[self.active_buf].filename);
-        }
     }
 }
 
+/*
+* editor mode
+*/
+#[allow(unused)]
+enum Mode {
+    Insert,
+    Normal,
+    Command,
+}
+
+impl Default for Mode {
+    fn default() -> Self {
+        Mode::Insert
+    }
+}
+
+/*
+* main
+*/
+
+fn handle_normal_mode(e : KeyCode) {
+
+}
+
+fn handle_insert_mode(ed : &mut Editor, e : KeyCode) -> io::Result<()> {
+
+    let buf = &mut ed.bufs[ed.active_buf];
+    match e {
+        // key handling
+        KeyCode::Esc => { 
+            // quit editor (panics if wrong)
+            execute!(io::stdout(), terminal::LeaveAlternateScreen).unwrap();
+            terminal::disable_raw_mode().unwrap();
+            ed.alive = false;
+        },
+        KeyCode::Char(_) => buf.insert(e.as_char().unwrap()),
+        KeyCode::Enter => buf.insert('\n'),
+        KeyCode::Backspace => buf.delete(1),
+
+        KeyCode::End => ed.write()?,
+
+        KeyCode::Home => ed.command(),
+        
+        // arrow keys
+        KeyCode::Up => buf.cursor_mv(Direction::Vert, -1),
+        KeyCode::Down => buf.cursor_mv(Direction::Vert, 1),
+        KeyCode::Right => buf.cursor_mv(Direction::Horiz, 1),
+        KeyCode::Left => buf.cursor_mv(Direction::Horiz, -1),
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_command_mode(ed : &mut Editor, e : KeyCode) -> io::Result<()> {
+    
+
+    Ok(())
+}
 
 fn main() -> io::Result<()> {
     // begin
@@ -67,11 +133,12 @@ fn main() -> io::Result<()> {
 
     // first buffer
     ed.new_buf();
+    ed.alive = true;
 
-    loop {
+    while ed.alive {
 
         // grab active buffer
-        let buf = &mut ed.bufs[ed.active_buf];
+        let buf = &ed.bufs[ed.active_buf];
 
         // at the beginning print the buffer
         queue!(
@@ -92,29 +159,16 @@ fn main() -> io::Result<()> {
         
         stdout.flush()?;
 
-        match crossterm::event::read()? {
-            crossterm::event::Event::Key(e) => match e.code {
-                // key handling
-                KeyCode::Esc => break,
-                KeyCode::Char(_) => buf.insert(e.code.as_char().unwrap()),
-                KeyCode::Enter => buf.insert('\n'),
-                KeyCode::Backspace => buf.delete(1),
+        
 
-                KeyCode::End => ed.write(),
-                
-                // arrow keys
-                KeyCode::Up => buf.cursor_mv(Direction::Vert, -1),
-                KeyCode::Down => buf.cursor_mv(Direction::Vert, 1),
-                KeyCode::Right => buf.cursor_mv(Direction::Horiz, 1),
-                KeyCode::Left => buf.cursor_mv(Direction::Horiz, -1),
-                _ => {}
-            },
+        match crossterm::event::read()? {
+            crossterm::event::Event::Key(e) => match ed.mode {
+                Mode::Command => handle_command_mode(&mut ed, e.code)?,
+                Mode::Insert => handle_insert_mode(&mut ed, e.code)?,
+                Mode::Normal => {},
+            }
             _ => {}
         }
     }
- 
-    // cleanup
-    execute!(stdout, terminal::LeaveAlternateScreen)?;
-    terminal::disable_raw_mode()?;
     Ok(())
 }
