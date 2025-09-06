@@ -74,8 +74,14 @@ impl Editor {
         Ok(())
     }
     
-    fn run(&self, args: Vec<String>) {
-        todo!()
+    fn run(&mut self, args: Vec<String>) {
+        
+        let cmd_name = args[0].as_str();
+
+        if let Some(cmd) = self.comds.get(cmd_name) {
+
+            cmd.run(args, self);
+        }
         /*
             let mut wr = std::io::BufWriter::new(
                 std::fs::File::create(&buf.filename)?);

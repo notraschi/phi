@@ -1,3 +1,5 @@
+use crate::Editor;
+
 
 /*
 * p[rompt struct - stores info regarding the prompt prompt
@@ -52,7 +54,7 @@ impl Prompt {
 
 pub trait Command {
     fn name(&self) -> &'static str;
-    fn run(&self, args: Vec<String>);
+    fn run(&self, args: Vec<String>, ed : &mut Editor) -> std::io::Result<()>;
 }
 
 pub struct Write;
@@ -61,7 +63,16 @@ impl Command for Write {
         "w"
     }
 
-    fn run(&self, args: Vec<String>) {
-        
+    fn run(&self, _args: Vec<String>, ed : &mut Editor) -> std::io::Result<()> {
+
+        let buf = &ed.bufs[ed.active_buf];
+
+        let mut wr = std::io::BufWriter::new(
+                std::fs::File::create(&buf.filename)?);
+
+        buf.lines.write_to(&mut wr);
+        std::io::Write::flush(&mut wr);
+
+        Ok(())
     }
 }
