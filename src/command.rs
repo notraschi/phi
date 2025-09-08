@@ -70,8 +70,8 @@ impl Command for Write {
         let mut wr = std::io::BufWriter::new(
                 std::fs::File::create(&buf.filename)?);
 
-        buf.lines.write_to(&mut wr);
-        std::io::Write::flush(&mut wr);
+        buf.lines.write_to(&mut wr)?;
+        std::io::Write::flush(&mut wr)?;
 
         Ok(())
     }

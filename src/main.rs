@@ -6,9 +6,9 @@
 
 
 use crossterm::{
-    cursor::{self, MoveTo}, event::KeyCode, execute, queue, style::Print, terminal::{self, size}, Command, QueueableCommand
+    cursor::{self, MoveTo}, event::KeyCode, execute, queue, style::Print, terminal::{self, size}, QueueableCommand
 };
-use std::{collections::HashMap, fs::File, io::{self, BufWriter, Write}};
+use std::{collections::HashMap, fs::File, io::{self, BufWriter, Write}, rc::Rc};
 
 mod buffer;
 mod command;
@@ -28,14 +28,15 @@ struct Editor {
     alive : bool,
     // command stuff
     prompt : Prompt,
-    comds  : HashMap<&'static str, Box<dyn command::Command>>
+    comds  : HashMap<&'static str, Rc<dyn command::Command>>
 }
 
 impl Default for Editor {
     fn default() -> Self {
 
-        let mut comds: HashMap<_, Box<dyn command::Command>> = HashMap::new();
-        comds.insert("w", Box::new(command::Write));
+        // inserting commands into the editor
+        let mut comds: HashMap<_, Rc<dyn command::Command>> = HashMap::new();
+        comds.insert(Write.name(), Rc::new(command::Write));
 
         Self { bufs: Default::default(), 
             active_buf: Default::default(),
@@ -78,17 +79,10 @@ impl Editor {
         
         let cmd_name = args[0].as_str();
 
-        if let Some(cmd) = self.comds.get(cmd_name) {
+        if let Some(cmd) = self.comds.get(cmd_name).cloned() {
 
             cmd.run(args, self);
         }
-        /*
-            let mut wr = std::io::BufWriter::new(
-                std::fs::File::create(&buf.filename)?);
-
-            buf.lines.write_to(&mut wr);
-            wr.flush();
-         */
     }
 }
 
