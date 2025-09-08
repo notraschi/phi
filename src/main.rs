@@ -6,11 +6,12 @@
 
 
 use crossterm::{
-    cursor::{self, MoveTo}, event::KeyCode, execute, queue, style::Print, terminal::{self, size}, QueueableCommand
+    cursor::{self, MoveTo}, event::{KeyCode, KeyEvent, KeyModifiers}, execute, queue, style::Print, terminal::{self, size}, QueueableCommand
 };
 use std::{collections::HashMap, fs::File, io::{self, BufWriter, Write}, rc::Rc};
 
 mod buffer;
+mod selection;
 mod command;
 use command::*;
 use buffer::*;
@@ -37,6 +38,7 @@ impl Default for Editor {
         // inserting commands into the editor
         let mut comds: HashMap<_, Rc<dyn command::Command>> = HashMap::new();
         comds.insert(Write.name(), Rc::new(command::Write));
+        comds.insert(Quit.name(), Rc::new(Quit));
 
         Self { bufs: Default::default(), 
             active_buf: Default::default(),
@@ -110,34 +112,47 @@ fn handle_normal_mode(e : KeyCode) {
     todo!();
 }
 
-fn handle_insert_mode(ed : &mut Editor, e : KeyCode) -> io::Result<()> {
+fn handle_insert_mode(ed : &mut Editor, e : KeyEvent) -> io::Result<()> {
 
-    let buf = &mut ed.bufs[ed.active_buf];
+    let buf = &mut ed.bufs[ed.active_buf]; 
     match e {
-        // quit editor 
-        KeyCode::Esc => { 
-            execute!(io::stdout(), terminal::LeaveAlternateScreen)?;
-            terminal::disable_raw_mode()?;
-            ed.alive = false;
-        },
-        // key handling
-        KeyCode::Char(_) => buf.insert(e.as_char().unwrap()),
-        KeyCode::Enter => buf.insert('\n'),
-        KeyCode::Backspace => buf.delete(1),
-
-        // write changes - tmp
-        KeyCode::End => ed.write()?,
-
-        // enter command mode - tmp
-        KeyCode::Home => ed.mode = Mode::Command,
+        // control pressed    
+        KeyEvent {
+            modifiers: KeyModifiers::CONTROL,
+            code: _, ..
+        } => {
+            {}
+        }
         
-        // arrow keys
-        KeyCode::Up => buf.cursor_mv(Direction::Vert, -1),
-        KeyCode::Down => buf.cursor_mv(Direction::Vert, 1),
-        KeyCode::Right => buf.cursor_mv(Direction::Horiz, 1),
-        KeyCode::Left => buf.cursor_mv(Direction::Horiz, -1),
+        // no modifier
+        KeyEvent {
+            modifiers: KeyModifiers::NONE,
+            code, ..
+        } => {
+            match code {
+                // key handling
+                KeyCode::Char(_) => buf.insert(code.as_char().unwrap()),
+                KeyCode::Enter => buf.insert('\n'),
+                KeyCode::Backspace => buf.delete(1),
+                
+                // write changes - tmp
+                KeyCode::End => ed.write()?,
+                
+                // enter command mode - tmp
+                KeyCode::Esc => ed.mode = Mode::Command,
+                
+                // arrow keys
+                KeyCode::Up => buf.cursor_mv(Direction::Vert, -1),
+                KeyCode::Down => buf.cursor_mv(Direction::Vert, 1),
+                KeyCode::Right => buf.cursor_mv(Direction::Horiz, 1),
+                KeyCode::Left => buf.cursor_mv(Direction::Horiz, -1),
+                
+                _ => {} 
+            }
+        }
         _ => {}
     }
+
     Ok(())
 }
 
@@ -230,7 +245,7 @@ fn main() -> io::Result<()> {
         match crossterm::event::read()? {
             crossterm::event::Event::Key(e) => match ed.mode {
                 Mode::Command => handle_command_mode(&mut ed, e.code)?,
-                Mode::Insert => handle_insert_mode(&mut ed, e.code)?,
+                Mode::Insert => handle_insert_mode(&mut ed, e)?,
                 Mode::Normal => {},
             }
             _ => {}

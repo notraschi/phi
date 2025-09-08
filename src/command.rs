@@ -57,11 +57,10 @@ pub trait Command {
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> std::io::Result<()>;
 }
 
+/// writes buffer to a file
 pub struct Write;
 impl Command for Write {
-    fn name(&self) -> &'static str {
-        "w"
-    }
+    fn name(&self) -> &'static str { "w" }
 
     fn run(&self, _args: Vec<String>, ed : &mut Editor) -> std::io::Result<()> {
 
@@ -73,6 +72,19 @@ impl Command for Write {
         buf.lines.write_to(&mut wr)?;
         std::io::Write::flush(&mut wr)?;
 
+        Ok(())
+    }
+}
+
+pub struct Quit;
+impl Command for Quit {
+    fn name(&self) -> &'static str { "q" }
+    fn run(&self, _args: Vec<String>, ed : &mut Editor) -> std::io::Result<()> {
+        crossterm::execute!(
+            std::io::stdout(), 
+            crossterm::terminal::LeaveAlternateScreen)?;
+        crossterm::terminal::disable_raw_mode()?;
+        ed.alive = false;
         Ok(())
     }
 }
