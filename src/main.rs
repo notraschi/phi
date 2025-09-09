@@ -8,7 +8,7 @@
 use crossterm::{
     cursor::{self, MoveTo}, event::{KeyCode, KeyEvent, KeyModifiers}, execute, queue, style::Print, terminal::{self, size}, QueueableCommand
 };
-use std::{collections::HashMap, fs::File, io::{self, BufWriter, Write}, rc::Rc};
+use std::{collections::HashMap, io::{self, Write}, rc::Rc};
 
 mod buffer;
 mod selection;
@@ -50,7 +50,7 @@ impl Default for Editor {
     }
 }
 
-#[allow(unused)]
+
 impl Editor {
 
     // adds an empty buffer to the editor
@@ -58,33 +58,6 @@ impl Editor {
         self.bufs.push(
             Buffer::new()
         );
-    }
-
-    fn save_as(&self, filename : &String) -> io::Result<()> {
-
-        todo!();
-    }
-
-    fn write(&self)  -> io::Result<()> {
-
-        let buf = &self.bufs[self.active_buf];
-
-        let mut wr = BufWriter::new(File::create(&buf.filename)?);
-
-        buf.lines.write_to(&mut wr);
-        wr.flush();
-
-        Ok(())
-    }
-    
-    fn run(&mut self, args: Vec<String>) {
-        
-        let cmd_name = args[0].as_str();
-
-        if let Some(cmd) = self.comds.get(cmd_name).cloned() {
-
-            cmd.run(args, self);
-        }
     }
 }
 
@@ -135,11 +108,10 @@ fn handle_insert_mode(ed : &mut Editor, e : KeyEvent) -> io::Result<()> {
                 KeyCode::Enter => buf.insert('\n'),
                 KeyCode::Backspace => buf.delete(1),
                 
-                // write changes - tmp
-                KeyCode::End => ed.write()?,
-                
-                // enter command mode - tmp
+                // enter command mode 
                 KeyCode::Esc => ed.mode = Mode::Command,
+                KeyCode::Delete => buf.undo(),
+                KeyCode::PageUp => buf.redo(),
                 
                 // arrow keys
                 KeyCode::Up => buf.cursor_mv(Direction::Vert, -1),
@@ -161,14 +133,23 @@ fn handle_command_mode(ed : &mut Editor, e : KeyCode) -> io::Result<()> {
     match e {
         KeyCode::Char(c) => ed.prompt.insert(c),
         KeyCode::Backspace => {
-            if ed.prompt.cx == 0 { ed.mode = Mode::Insert; }
-            else              { ed.prompt.backspace(); }
+            if ed.prompt.cmd.is_empty() { ed.mode = Mode::Insert; }
+            else { ed.prompt.backspace(); }
         },
         KeyCode::Enter => { 
             if let Some(args) = ed.prompt.parse() {
-                ed.run(args);
+
+                let cmd_name = args[0].as_str();
+                if let Some(cmd) = ed.comds.get(cmd_name).cloned() {
+
+                    cmd.run(args, ed)?;
+                    ed.prompt.cx = 0;
+                    ed.mode = Mode::Insert;
+
+                } else {
+                    ed.prompt.msg("not a command!".to_owned());
+                }
             }
-            ed.mode = Mode::Insert;
         },
 
         // quit prompt

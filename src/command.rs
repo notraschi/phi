@@ -16,6 +16,11 @@ pub struct Prompt {
 impl Prompt {
 
     pub fn insert(&mut self, char : char) {
+        // is a msg was displayed
+        if self.is_msg { 
+            self.cmd.clear(); 
+            self.is_msg = false; 
+        }
 
         let byte_index = self.cmd.char_indices()
             .nth(self.cx)
@@ -27,7 +32,12 @@ impl Prompt {
     }
 
     pub fn backspace(&mut self) {
-
+        // is a msg was displayed
+        if self.is_msg { 
+            self.cmd.clear(); 
+            self.is_msg = false;
+            return;
+        }
         // -1 so we delete the char before
         let byte_index = self.cmd.char_indices()
             .nth(self.cx -1)
@@ -50,6 +60,14 @@ impl Prompt {
 
         Some(args)
     }
+
+    /// shows a msg in the prompt to display to the user. 
+    /// when user types something, the msg is removed
+    pub fn msg(&mut self, msg : String) {
+        self.cmd = msg;
+        self.cx = 0;
+        self.is_msg = true
+    }
 }
 
 pub trait Command {
@@ -61,7 +79,6 @@ pub trait Command {
 pub struct Write;
 impl Command for Write {
     fn name(&self) -> &'static str { "w" }
-
     fn run(&self, _args: Vec<String>, ed : &mut Editor) -> std::io::Result<()> {
 
         let buf = &ed.bufs[ed.active_buf];
