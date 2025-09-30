@@ -60,11 +60,12 @@ impl Buffer {
 		// get the visual line we're curr editing and increase len
 		let (cx, cy) = self.rope_to_visual(self.cs);
 		// len is capped at 10 chars long!!!!!
-		if self.visual[cy].len < 10 {
+		if self.visual[cy].len < 20 {
 			self.visual[cy].len += 1;
 		} else {
+			// TODO: check if its a newline!!!
 			let new_vis = VisualLine {
-				offset : 10, // wrong!!!
+				offset : self.visual[cy].offset +20, 
 				len : 1,
 				rope : self.visual[cy].rope,
 			};
@@ -207,7 +208,7 @@ impl Buffer {
 		(cx, cy)		
 	}
 
-	fn visual_to_rope(&self, cx : usize, cy : usize) -> usize {
+	pub fn visual_to_rope(&self, cx : usize, cy : usize) -> usize {
 		let vl = self.visual[cy];
 		
 		// total offset from the beginning of the rope line
@@ -235,5 +236,5 @@ impl Edit {
 pub struct VisualLine {
 	offset  : usize,
 	pub len : usize,
-	rope    : usize,
+	pub rope    : usize,
 }

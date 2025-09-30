@@ -191,18 +191,22 @@ fn main() -> io::Result<()> {
             stdout,
             terminal::Clear(terminal::ClearType::All),
         )?;
-        for (i, vl) in buf.visual.clone().into_iter().enumerate() {
-            for i in 0..vl.len {
+        for (i, vl) in buf.visual.iter().enumerate() {
 			
-				
-			}
+			let start = buf.visual_to_rope(0, i);
 
-			//queue!(
-              //  stdout,
-                // MoveTo(0, i as u16),
-                // Print(format!("{:>off$} {}", i+1, line, off = buf.offset as usize -1))
-				//Print(format!("{:?}", buf.))
-            //)?;
+			queue!(
+				stdout,
+                MoveTo(0, i as u16),
+                //Print(format!("{:>off$} {}", i+1, line, off = buf.offset as usize -1))
+				Print(format!("{:<off$} {}", 
+					vl.rope,
+					buf.lines.slice(
+						start .. start + vl.len
+					),
+					off = buf.offset as usize -1
+				))
+            )?;
         }
 
         // now its the users turn
@@ -221,7 +225,7 @@ fn main() -> io::Result<()> {
             // if mode isn't command, mouse pos if where it should be
             _ => {
                 let (cx, cy) = buf.rope_to_visual(buf.cs);
-                stdout.queue(cursor::MoveTo(cx as u16 /*+ buf.offset*/, cy as u16))?;        
+                stdout.queue(cursor::MoveTo(cx as u16 + buf.offset, cy as u16))?;        
             },
         }
 
