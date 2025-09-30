@@ -8,12 +8,14 @@ pub struct Buffer {
     // pub saved : bool,
     // each buffer stores its own cursor position
     pub offset : u16,
-    cs : usize,
+    pub cs : usize,
     // used for movement - might move to its own Cursor struct
     cached_cx : usize,
     // undo stuff
     curr_edit : usize,
     history : Vec<Edit>,
+	// visual stuff - trying this out
+	pub visual : Vec<VisualLine>,
 }
 
 pub enum Direction {
@@ -32,6 +34,7 @@ impl Buffer {
                 cached_cx : 0,
                 curr_edit : 1,
                 history : vec![Edit::default(), Edit::default()],
+				visual : vec![VisualLine::default()],
         }
     }
 
@@ -52,6 +55,21 @@ impl Buffer {
         edit.text = self.lines.clone();
         edit.cs   = self.cs;
         edit.to_stash = false;
+
+		// try out the new visual line stuff..
+		// get the visual line we're curr editing and increase len
+		let (cx, cy) = self.rope_to_visual(self.cs);
+		// len is capped at 10 chars long!!!!!
+		if self.visual[cy].len < 10 {
+			self.visual[cy].len += 1;
+		} else {
+			let new_vis = VisualLine {
+				offset : 10, // wrong!!!
+				len : 1,
+				rope : self.visual[cy].rope,
+			};
+			self.visual.insert(cy +1, new_vis);
+		}
 
     }
 
@@ -167,6 +185,36 @@ impl Buffer {
         self.history.truncate(self.curr_edit);
         self.history.push(Edit::new(self.cs));
     }
+
+	pub fn rope_to_visual(&self, cs : usize) -> (usize, usize) {
+		// let cy = binary search within visual..
+		// linear search for testing..
+
+		let rope = self.lines.char_to_line(cs);
+		let mut cy = rope;
+		// find correct group of VisualLines
+		while self.visual[cy].rope != rope {
+			cy += 1;
+		}
+		// find actual correct VisualLine
+		let mut cx: usize = cs - self.lines.line_to_char(rope);
+		while cy < self.visual.len() -1 && self.visual[cy].len <= cx -1 {
+			// decrement cx so it points to the remaining space
+			cx -= self.visual[cy].len;
+			cy += 1;
+		}
+		
+		(cx, cy)		
+	}
+
+	fn visual_to_rope(&self, cx : usize, cy : usize) -> usize {
+		let vl = self.visual[cy];
+		
+		// total offset from the beginning of the rope line
+		let tot_off = vl.offset + cx;
+
+		tot_off + self.lines.line_to_char(vl.rope)
+	}
 }
 
 #[derive(Default)]
@@ -181,4 +229,11 @@ impl Edit {
     fn new(cs : usize) -> Self {
         Edit { text: ropey::Rope::new(), cs, to_stash : false }
     }
+}
+
+#[derive(Default, Clone, Copy, Debug)]
+pub struct VisualLine {
+	offset  : usize,
+	pub len : usize,
+	rope    : usize,
 }
