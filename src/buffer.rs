@@ -27,14 +27,15 @@ pub enum Direction {
 impl Buffer {
 
     pub fn new() -> Buffer {
-        Buffer { lines: ropey::Rope::new(), 
-                filename: String::from("new-file.md"),
-                // modified: false, saved: false, new : true,
-                offset: 5, cs: 0,
-                cached_cx : 0,
-                curr_edit : 1,
-                history : vec![Edit::default(), Edit::default()],
-				visual : vec![VisualLine::default()],
+        Buffer { 
+			lines: ropey::Rope::new(), 
+			filename: String::from("new-file.md"),
+			// modified: false, saved: false, new : true,
+			offset: 5, cs: 0,
+			cached_cx : 0,
+			curr_edit : 1,
+			history : vec![Edit::default(), Edit::default()],
+			visual : vec![VisualLine::default()],
         }
     }
 
@@ -58,20 +59,8 @@ impl Buffer {
 
 		// try out the new visual line stuff..
 		// get the visual line we're curr editing and increase len
-		let (cx, cy) = self.rope_to_visual(self.cs);
-		// len is capped at 10 chars long!!!!!
-		if self.visual[cy].len < 20 {
-			self.visual[cy].len += 1;
-		} else {
-			// TODO: check if its a newline!!!
-			let new_vis = VisualLine {
-				offset : self.visual[cy].offset +20, 
-				len : 1,
-				rope : self.visual[cy].rope,
-			};
-			self.visual.insert(cy +1, new_vis);
-		}
-
+		// TODO: check if its a newline!!!
+		self.update_visual_line(true);	
     }
 
     pub fn delete(&mut self, amt: usize) {
@@ -92,7 +81,10 @@ impl Buffer {
         let edit = &mut self.history[self.curr_edit];
         edit.text = self.lines.clone();
         edit.cs   = self.cs;
-        edit.to_stash = true;        
+        edit.to_stash = true;       
+
+		// visual line stuff
+		self.update_visual_line(false); 
     }
 
     pub fn cursor_mv(&mut self, dir: Direction, amt: i32) {
@@ -148,12 +140,16 @@ impl Buffer {
 
     pub fn get_cursor_pos(&self) -> (i32, i32) {
 
-        let cy = self.lines.char_to_line(self.cs);
-        let cx = self.cs - self.lines.line_to_char(cy);
+        // let cy = self.lines.char_to_line(self.cs);
+        // let cx = self.cs - self.lines.line_to_char(cy);
+		let (cx, cy) = self.rope_to_visual(self.cs);
 
         (cx as i32,cy as i32)
     }
 
+	/*
+	*	section related to undo/redo stuff
+	*/
     pub fn undo(&mut self) {
 
         self.curr_edit -= 1;
@@ -187,6 +183,9 @@ impl Buffer {
         self.history.push(Edit::new(self.cs));
     }
 
+	/*
+	* section related to handling visual lines
+	*/
 	pub fn rope_to_visual(&self, cs : usize) -> (usize, usize) {
 		// let cy = binary search within visual..
 		// linear search for testing..
@@ -199,7 +198,7 @@ impl Buffer {
 		}
 		// find actual correct VisualLine
 		let mut cx: usize = cs - self.lines.line_to_char(rope);
-		while cy < self.visual.len() -1 && self.visual[cy].len <= cx -1 {
+		while cy +1 < self.visual.len() && self.visual[cy].len <= cx {
 			// decrement cx so it points to the remaining space
 			cx -= self.visual[cy].len;
 			cy += 1;
@@ -215,6 +214,37 @@ impl Buffer {
 		let tot_off = vl.offset + cx;
 
 		tot_off + self.lines.line_to_char(vl.rope)
+	}
+
+	fn update_visual_line(&mut self, insert: bool) {
+		// getting last visual line related to current rope line
+		let (_, mut last) = self.rope_to_visual(self.cs);
+		let rope = self.visual[last].rope;
+		while last < self.visual.len() && self.visual[last].rope == rope {
+			last += 1;
+		}
+		last -= 1;
+
+		// len is capped at 20 chars long!!!!!
+		if insert {
+			if self.visual[last].len < 20 {
+				self.visual[last].len += 1;
+			} else {
+				let new_vis = VisualLine {
+					offset : self.visual[last].offset +20, 
+					len : 1,
+					rope,
+				};
+				self.visual.insert(last +1, new_vis);
+			}
+		} else {
+			if self.visual[last].len > 1 
+				|| (self.visual.len() == 1 && self.visual[last].len > 0) {
+				self.visual[last].len -= 1;
+			} else if self.visual.len() > 1 {
+				let _ = self.visual.remove(last);
+			} 
+		}
 	}
 }
 

@@ -1,6 +1,1 @@
-guarda posso scrivere
-
-
-
-fa tutte le cose che faceva 
-prima
+ dggfdgfdgffdg dg dfg fdg fg fdg fdg fdg dfg dfgfd dg dfg fdg dg dfg fd 
