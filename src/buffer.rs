@@ -44,7 +44,7 @@ impl Buffer {
         // inserting
         self.lines.insert_char(self.cs, char);
         self.cs += 1;
-        self.cached_cx = self.get_cursor_pos().0 as usize;
+        // self.cached_cx = self.get_cursor_pos().0 as usize;
         
         // stash edit + new edit if char is space or a newline 
         // ..or i was prev deleting chars
@@ -60,7 +60,15 @@ impl Buffer {
 		// try out the new visual line stuff..
 		// get the visual line we're curr editing and increase len
 		// TODO: check if its a newline!!!
-		self.update_visual_line(true);	
+		if char == '\n' {
+			let new_rope = self.lines.char_to_line(self.cs);
+			self.newline_visual_line(new_rope -1);
+		} else {
+			self.update_visual_line(true);
+		}
+
+		// doing this here at the end..
+		self.cached_cx = self.get_cursor_pos().0 as usize;
     }
 
     pub fn delete(&mut self, amt: usize) {
@@ -96,7 +104,7 @@ impl Buffer {
         match dir {
             // has to cache the max cx
             Direction::Vert => {
-
+				
                 let (_, cy) = self.get_cursor_pos();
                 let ls = &mut self.lines;
                 
@@ -244,6 +252,56 @@ impl Buffer {
 			} else if self.visual.len() > 1 {
 				let _ = self.visual.remove(last);
 			} 
+		}
+	}
+
+	fn newline_visual_line(&mut self, og_rope : usize) {
+		// len is capped at 20 chars long!!!
+
+		// get first visual line
+		let mut cy = og_rope;
+		while self.visual[cy].rope != og_rope {
+			cy += 1;
+		}
+		// rewrap the og line
+		// NOTE: og rope line len will be shorter now
+		let mut rope_len = self.lines.line(og_rope).len_chars();
+		while rope_len > 0 {
+			self.visual[cy].len = 20.min(rope_len);
+			rope_len -= self.visual[cy].len;
+			cy += 1;
+		}
+		// needed for later
+		let update_idx_start = cy;
+
+		// og rope line wrapping is terminated, now the new rope line
+		// we being using visual lines referring to the og rope line
+		// if needed we insert a new visual line
+		let mut rope_len = self.lines.line(og_rope +1).len_chars();
+		let mut offset = 0;
+		while rope_len > 0 {
+			// having to insert a new visualline, updating isnt enougth
+			if cy == self.visual.len() || self.visual[cy].rope != og_rope {
+				// in case of insertion, at most one line is added
+				// this happens therefore at the last iteration
+				let new_vis = VisualLine {
+					offset, len : rope_len, rope : og_rope // will be updated at the end
+				};
+				self.visual.insert(cy, new_vis);
+				rope_len = 0;
+			} else {
+				self.visual[cy].offset = offset;
+				self.visual[cy].len    = 20.min(rope_len);
+				self.visual[cy].rope   = og_rope; // will be updated at the end
+
+				rope_len -= self.visual[cy].len;
+				offset += 20;
+			}
+			cy += 1;
+		}
+		// now its time to update all the 'rope' fields
+		for i in update_idx_start .. self.visual.len() {
+			self.visual[i].rope += 1;
 		}
 	}
 }
