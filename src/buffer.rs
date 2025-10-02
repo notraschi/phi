@@ -104,7 +104,7 @@ impl Buffer {
         match dir {
             // has to cache the max cx
             Direction::Vert => {
-				
+				/*
                 let (_, cy) = self.get_cursor_pos();
                 let ls = &mut self.lines;
                 
@@ -132,6 +132,12 @@ impl Buffer {
                     self.cs = ls.line_to_char(cy);
                     self.cs += self.cached_cx;
                 }
+				*/
+				let (cx, cy) = self.get_cursor_pos();
+				// check bounds
+				if cy + amt < 0 || cy + amt >= self.visual.len() as i32 { return; }
+				// no cached_cx for now
+				self.cs = self.visual_to_rope(cx as usize, (cy + amt) as usize);
             },
             
             // horiz movmnt just has to check bounds
@@ -141,7 +147,7 @@ impl Buffer {
                 self.cs = (amt + self.cs as i32) as usize;
 
                 // update the cached cx
-                self.cached_cx = self.get_cursor_pos().0 as usize;
+                // self.cached_cx = self.get_cursor_pos().0 as usize;
             },
         }
     }
@@ -271,9 +277,7 @@ impl Buffer {
 			rope_len -= self.visual[cy].len;
 			cy += 1;
 		}
-		// needed for later
-		let update_idx_start = cy;
-
+		
 		// og rope line wrapping is terminated, now the new rope line
 		// we being using visual lines referring to the og rope line
 		// if needed we insert a new visual line
@@ -285,14 +289,14 @@ impl Buffer {
 				// in case of insertion, at most one line is added
 				// this happens therefore at the last iteration
 				let new_vis = VisualLine {
-					offset, len : rope_len, rope : og_rope // will be updated at the end
+					offset, len : rope_len, rope : og_rope +1 // will be updated at the end
 				};
 				self.visual.insert(cy, new_vis);
 				rope_len = 0;
 			} else {
 				self.visual[cy].offset = offset;
 				self.visual[cy].len    = 20.min(rope_len);
-				self.visual[cy].rope   = og_rope; // will be updated at the end
+				self.visual[cy].rope   = og_rope +1; // will be updated at the end
 
 				rope_len -= self.visual[cy].len;
 				offset += 20;
@@ -300,7 +304,7 @@ impl Buffer {
 			cy += 1;
 		}
 		// now its time to update all the 'rope' fields
-		for i in update_idx_start .. self.visual.len() {
+		for i in cy .. self.visual.len() {
 			self.visual[i].rope += 1;
 		}
 	}

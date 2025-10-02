@@ -164,6 +164,8 @@ fn handle_command_mode(ed : &mut Editor, e : KeyCode) -> io::Result<()> {
 * main
 */
 fn main() -> io::Result<()> {
+
+	std::env::set_var("RUST_BACKTRACE", "1");
     // begin
     let mut stdout = io::stdout();
     terminal::enable_raw_mode()?;
@@ -205,9 +207,21 @@ fn main() -> io::Result<()> {
 						start .. start + vl.len
 					),
 					off = buf.offset as usize -1
-				))
+				)),
+				// debug
+				// MoveTo(0, i as u16 + 20),	
+				// Print(format!("\n{:?}", vl)),
             )?;
         }
+		// queue!(stdout, Print(format!("{}", buf.cs)));
+		
+		/*for (i, line) in buf.lines.lines().enumerate() {
+			queue!(
+				stdout, 
+				MoveTo(0, i as u16),
+				Print(format!("{:>off$} {}", i+1, line, off = buf.offset as usize -1))
+			)?;
+		}*/
 
         // now its the users turn
         match ed.mode {
@@ -224,7 +238,7 @@ fn main() -> io::Result<()> {
             },
             // if mode isn't command, mouse pos if where it should be
             _ => {
-                let (cx, cy) = buf.rope_to_visual(buf.cs);
+                let (cx, cy) = buf.get_cursor_pos();
                 stdout.queue(cursor::MoveTo(cx as u16 + buf.offset, cy as u16))?;        
             },
         }
