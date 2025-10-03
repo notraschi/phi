@@ -8,7 +8,7 @@ pub struct Buffer {
     // pub saved : bool,
     // each buffer stores its own cursor position
     pub offset : u16,
-    pub cs : usize,
+    cs : usize,
     // used for movement - might move to its own Cursor struct
     cached_cx : usize,
     // undo stuff
@@ -27,8 +27,8 @@ pub enum Direction {
 impl Buffer {
 
     pub fn new() -> Buffer {
-        Buffer { 
-			lines: ropey::Rope::new(), 
+        let mut  buf = Buffer { 
+			lines: ropey::Rope::from_str("text\nlong fuckass text fuckass bitch\nayoooo!"), 
 			filename: String::from("new-file.md"),
 			// modified: false, saved: false, new : true,
 			offset: 5, cs: 0,
@@ -36,7 +36,10 @@ impl Buffer {
 			curr_edit : 1,
 			history : vec![Edit::default(), Edit::default()],
 			visual : vec![VisualLine::default()],
-        }
+        };
+        buf.build_visual_line();
+
+        buf
     }
 
     pub fn insert(&mut self, char : char) {
@@ -60,12 +63,15 @@ impl Buffer {
 		// try out the new visual line stuff..
 		// get the visual line we're curr editing and increase len
 		// TODO: check if its a newline!!!
-		if char == '\n' {
-			let new_rope = self.lines.char_to_line(self.cs);
-			self.newline_visual_line(new_rope -1);
+		/*
+        if char == '\n' {
+			// let new_rope = self.lines.char_to_line(self.cs);
+			// self.newline_visual_line(new_rope -1);
 		} else {
-			self.update_visual_line(true);
-		}
+            self.update_visual_line(true);
+		} 
+        */
+        self.build_visual_line();
 
 		// doing this here at the end..
 		self.cached_cx = self.get_cursor_pos().0 as usize;
@@ -92,7 +98,9 @@ impl Buffer {
         edit.to_stash = true;       
 
 		// visual line stuff
-		self.update_visual_line(false); 
+		// self.update_visual_line(false); 
+        self.build_visual_line();
+
     }
 
     pub fn cursor_mv(&mut self, dir: Direction, amt: i32) {
@@ -133,11 +141,18 @@ impl Buffer {
                     self.cs += self.cached_cx;
                 }
 				*/
-				let (cx, cy) = self.get_cursor_pos();
-				// check bounds
+
+				let (_, cy) = self.get_cursor_pos();
+				// check top/bottom bounds
 				if cy + amt < 0 || cy + amt >= self.visual.len() as i32 { return; }
+
+                let len = self.visual[(cy + amt) as usize].len;
+                let cx;
+                if len > self.cached_cx +1 { cx = self.cached_cx; }
+                else { cx = len -1; }
+
 				// no cached_cx for now
-				self.cs = self.visual_to_rope(cx as usize, (cy + amt) as usize);
+				self.cs = self.visual_to_rope(cx, (cy + amt) as usize);
             },
             
             // horiz movmnt just has to check bounds
@@ -147,17 +162,15 @@ impl Buffer {
                 self.cs = (amt + self.cs as i32) as usize;
 
                 // update the cached cx
-                // self.cached_cx = self.get_cursor_pos().0 as usize;
+                self.cached_cx = self.get_cursor_pos().0 as usize;
             },
         }
     }
 
+    /// wrapper method to get the cursor (cx, cy) coords
     pub fn get_cursor_pos(&self) -> (i32, i32) {
 
-        // let cy = self.lines.char_to_line(self.cs);
-        // let cx = self.cs - self.lines.line_to_char(cy);
 		let (cx, cy) = self.rope_to_visual(self.cs);
-
         (cx as i32,cy as i32)
     }
 
@@ -200,16 +213,19 @@ impl Buffer {
 	/*
 	* section related to handling visual lines
 	*/
-	pub fn rope_to_visual(&self, cs : usize) -> (usize, usize) {
-		// let cy = binary search within visual..
-		// linear search for testing..
+    /// converts between index in the Rope to indexes (col, row).
+    /// panics if indexes cant be found.
+	fn rope_to_visual(&self, cs : usize) -> (usize, usize) {
 
+        // get first visual line referring to corresponding rope line
 		let rope = self.lines.char_to_line(cs);
-		let mut cy = rope;
-		// find correct group of VisualLines
-		while self.visual[cy].rope != rope {
-			cy += 1;
-		}
+        // always at least one visual line is used to represent one rope line
+        let mut cy = match self.visual[rope .. ].iter()
+            .position(|vl| vl.rope == rope) {
+                Some(i) => i + rope,
+                None => panic!("was looking for rope {}, {:?}", rope, self.visual),
+        };
+
 		// find actual correct VisualLine
 		let mut cx: usize = cs - self.lines.line_to_char(rope);
 		while cy +1 < self.visual.len() && self.visual[cy].len <= cx {
@@ -217,10 +233,10 @@ impl Buffer {
 			cx -= self.visual[cy].len;
 			cy += 1;
 		}
-		
 		(cx, cy)		
 	}
 
+    /// convert (col, row) indexes to the corresponding Rope index
 	pub fn visual_to_rope(&self, cx : usize, cy : usize) -> usize {
 		let vl = self.visual[cy];
 		
@@ -230,6 +246,8 @@ impl Buffer {
 		tot_off + self.lines.line_to_char(vl.rope)
 	}
 
+    /// update visual line after the insertion/deletion of a *single* char.
+    /// runs in constant time, cant delete/insert visual lines
 	fn update_visual_line(&mut self, insert: bool) {
 		// getting last visual line related to current rope line
 		let (_, mut last) = self.rope_to_visual(self.cs);
@@ -261,6 +279,7 @@ impl Buffer {
 		}
 	}
 
+    /// handles the case of a newline
 	fn newline_visual_line(&mut self, og_rope : usize) {
 		// len is capped at 20 chars long!!!
 
@@ -308,6 +327,37 @@ impl Buffer {
 			self.visual[i].rope += 1;
 		}
 	}
+
+    /// completely rebuilds self.visual.
+    /// *can* deal with terminal copy/paste correctly
+    fn build_visual_line(&mut self) {
+
+        self.visual = self.lines.lines()
+            .enumerate()
+            .flat_map(|(i, line)| {
+                
+                let mut rope_len = line.len_chars();
+                let mut vec = vec![];
+                let mut offset = 0;
+
+                while rope_len > 0 {
+                    let new_vis = VisualLine {
+                        offset, len : 20.min(rope_len), rope : i
+                    };
+                    vec.push(new_vis);
+                    
+                    rope_len -= new_vis.len;
+                    offset   += 20;
+                }
+                // edge case
+                if line.len_chars() == 0 {
+                    vec.push( VisualLine { offset: 0, len: 0, rope: i } );
+                }
+
+                vec
+            })
+            .collect();
+    }
 }
 
 #[derive(Default)]

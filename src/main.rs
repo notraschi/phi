@@ -165,7 +165,7 @@ fn handle_command_mode(ed : &mut Editor, e : KeyCode) -> io::Result<()> {
 */
 fn main() -> io::Result<()> {
 
-	std::env::set_var("RUST_BACKTRACE", "1");
+	// std::env::set_var("RUST_BACKTRACE", "1");
     // begin
     let mut stdout = io::stdout();
     terminal::enable_raw_mode()?;
@@ -200,7 +200,6 @@ fn main() -> io::Result<()> {
 			queue!(
 				stdout,
                 MoveTo(0, i as u16),
-                //Print(format!("{:>off$} {}", i+1, line, off = buf.offset as usize -1))
 				Print(format!("{:<off$} {}", 
 					vl.rope,
 					buf.lines.slice(
@@ -208,20 +207,8 @@ fn main() -> io::Result<()> {
 					),
 					off = buf.offset as usize -1
 				)),
-				// debug
-				// MoveTo(0, i as u16 + 20),	
-				// Print(format!("\n{:?}", vl)),
             )?;
         }
-		// queue!(stdout, Print(format!("{}", buf.cs)));
-		
-		/*for (i, line) in buf.lines.lines().enumerate() {
-			queue!(
-				stdout, 
-				MoveTo(0, i as u16),
-				Print(format!("{:>off$} {}", i+1, line, off = buf.offset as usize -1))
-			)?;
-		}*/
 
         // now its the users turn
         match ed.mode {
