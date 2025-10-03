@@ -28,7 +28,7 @@ impl Buffer {
 
     pub fn new() -> Buffer {
         let mut  buf = Buffer { 
-			lines: ropey::Rope::from_str("text\nlong fuckass text fuckass bitch\nayoooo!"), 
+			lines: ropey::Rope::new(), 
 			filename: String::from("new-file.md"),
 			// modified: false, saved: false, new : true,
 			offset: 5, cs: 0,
@@ -112,36 +112,6 @@ impl Buffer {
         match dir {
             // has to cache the max cx
             Direction::Vert => {
-				/*
-                let (_, cy) = self.get_cursor_pos();
-                let ls = &mut self.lines;
-                
-                // checking bounds
-                if cy + amt < 0 || cy + amt >= ls.len_lines() as i32 { return; }
-                
-                // char index of the start of the target line
-                let cy = (cy + amt) as usize;
-                
-                // if target line < terget pos, go to end 
-                // i32 should avoid underflow
-                if self.cached_cx  as i32 > ls.line(cy).len_chars() as i32 -1 {
-                    
-                    self.cs = ls.line_to_char(cy);
-
-                    self.cs += ls.line(cy).len_chars();
-                    
-                    // off by one mistake when not-deling with newlines
-                    let lc = ls.line(cy).chars().last();
-                    if lc.is_some() && lc.unwrap() == '\n' {
-                        self.cs -= 1;
-                    }
-                } else { // go to target pos
-                    
-                    self.cs = ls.line_to_char(cy);
-                    self.cs += self.cached_cx;
-                }
-				*/
-
 				let (_, cy) = self.get_cursor_pos();
 				// check top/bottom bounds
 				if cy + amt < 0 || cy + amt >= self.visual.len() as i32 { return; }
@@ -149,7 +119,9 @@ impl Buffer {
                 let len = self.visual[(cy + amt) as usize].len;
                 let cx;
                 if len > self.cached_cx +1 { cx = self.cached_cx; }
-                else { cx = len -1; }
+                // off by one mistake bc the last line dont have a newline char
+                else if cy + amt +1 == self.visual.len() as i32 { cx = len; }
+                else { cx = 1.max(len) -1; }
 
 				// no cached_cx for now
 				self.cs = self.visual_to_rope(cx, (cy + amt) as usize);
@@ -160,7 +132,6 @@ impl Buffer {
                 self.cs as i32 + amt <= self.lines.len_chars() as i32 
             {
                 self.cs = (amt + self.cs as i32) as usize;
-
                 // update the cached cx
                 self.cached_cx = self.get_cursor_pos().0 as usize;
             },
@@ -169,7 +140,7 @@ impl Buffer {
 
     /// wrapper method to get the cursor (cx, cy) coords
     pub fn get_cursor_pos(&self) -> (i32, i32) {
-
+        
 		let (cx, cy) = self.rope_to_visual(self.cs);
         (cx as i32,cy as i32)
     }
