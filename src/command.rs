@@ -1,4 +1,4 @@
-use crate::Editor;
+use crate::{buffer::Buffer, Editor};
 
 
 /*
@@ -82,7 +82,7 @@ impl Command for Write {
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
 
         if args.len() > 1 { return Err("too many args".to_owned()); }
-        
+
         let buf = &ed.bufs[ed.active_buf];
         let mut wr = std::io::BufWriter::new(
             convert_res(std::fs::File::create(&buf.filename))
@@ -95,6 +95,7 @@ impl Command for Write {
     }
 }
 
+/// exits the editor, does not save any modifications
 pub struct Quit;
 impl Command for Quit {
     fn name(&self) -> &'static str { "q" }
@@ -109,11 +110,21 @@ impl Command for Quit {
     }
 }
 
+/// loads an existing file into a new buffer and sets it as the active one.
 pub struct Edit;
 impl Command for Edit {
     fn name(&self) -> &'static str { "e" }
-    fn run(&self, _args: Vec<String>, _ed : &mut Editor) -> Result<(), String> {
+    fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
         
+        let reader = std::io::BufReader::new(
+            convert_res(std::fs::File::open(args[1].to_owned()))?
+        );
+
+        ed.bufs.push(Buffer::open(args[1].clone(),
+            convert_res(ropey::Rope::from_reader(reader))?
+        ));
+        ed.active_buf = ed.bufs.len() -1; 
+
         Ok(())
     }
 }

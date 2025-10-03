@@ -39,6 +39,7 @@ impl Default for Editor {
         let mut comds: HashMap<_, Rc<dyn command::Command>> = HashMap::new();
         comds.insert(Write.name(), Rc::new(command::Write));
         comds.insert(Quit.name(), Rc::new(Quit));
+        comds.insert(Edit.name(), Rc::new(Edit));
 
         Self { bufs: Default::default(), 
             active_buf: Default::default(),
