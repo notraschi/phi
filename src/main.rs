@@ -128,7 +128,7 @@ fn handle_insert_mode(ed : &mut Editor, e : KeyEvent) -> io::Result<()> {
     Ok(())
 }
 
-fn handle_command_mode(ed : &mut Editor, e : KeyCode) -> io::Result<()> {
+fn handle_command_mode(ed : &mut Editor, e : KeyCode) {
     
     match e {
         KeyCode::Char(c) => ed.prompt.insert(c),
@@ -142,9 +142,15 @@ fn handle_command_mode(ed : &mut Editor, e : KeyCode) -> io::Result<()> {
                 let cmd_name = args[0].as_str();
                 if let Some(cmd) = ed.comds.get(cmd_name).cloned() {
 
-                    cmd.run(args, ed)?;
-                    ed.prompt.cx = 0;
-                    ed.mode = Mode::Insert;
+                    match cmd.run(args, ed) {
+                        Ok(()) => {
+                            ed.prompt.cx = 0;
+                            ed.mode = Mode::Insert;
+                        },
+                        Err(msg) => {
+                            ed.prompt.msg(msg);
+                        }
+                    }
 
                 } else {
                     ed.prompt.msg("not a command!".to_owned());
@@ -157,7 +163,6 @@ fn handle_command_mode(ed : &mut Editor, e : KeyCode) -> io::Result<()> {
         KeyCode::Home => ed.mode = Mode::Insert,
         _ => {}
     }
-    Ok(())
 }
 
 /*
@@ -236,7 +241,7 @@ fn main() -> io::Result<()> {
         // switch on modes
         match crossterm::event::read()? {
             crossterm::event::Event::Key(e) => match ed.mode {
-                Mode::Command => handle_command_mode(&mut ed, e.code)?,
+                Mode::Command => handle_command_mode(&mut ed, e.code),
                 Mode::Insert => handle_insert_mode(&mut ed, e)?,
                 Mode::Normal => {},
             }

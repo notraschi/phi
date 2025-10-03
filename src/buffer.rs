@@ -27,9 +27,13 @@ pub enum Direction {
 impl Buffer {
 
     pub fn new() -> Buffer {
+        Buffer::open("new-file.md".to_owned(), ropey::Rope::new())
+    }
+
+    pub fn open(filename : String, ctx : ropey::Rope) -> Buffer {
         let mut  buf = Buffer { 
-			lines: ropey::Rope::new(), 
-			filename: String::from("new-file.md"),
+			lines: ctx, 
+			filename,
 			// modified: false, saved: false, new : true,
 			offset: 5, cs: 0,
 			cached_cx : 0,
@@ -61,19 +65,9 @@ impl Buffer {
         edit.to_stash = false;
 
 		// try out the new visual line stuff..
-		// get the visual line we're curr editing and increase len
-		// TODO: check if its a newline!!!
-		/*
-        if char == '\n' {
-			// let new_rope = self.lines.char_to_line(self.cs);
-			// self.newline_visual_line(new_rope -1);
-		} else {
-            self.update_visual_line(true);
-		} 
-        */
         self.build_visual_line();
 
-		// doing this here at the end..
+		// doing this here at the end, when visual lines are up to date
 		self.cached_cx = self.get_cursor_pos().0 as usize;
     }
 
