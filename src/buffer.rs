@@ -140,7 +140,7 @@ impl Buffer {
 
     /// wrapper method to get the cursor (cx, cy) coords
     pub fn get_cursor_pos(&self) -> (i32, i32) {
-        
+
 		let (cx, cy) = self.rope_to_visual(self.cs);
         (cx as i32,cy as i32)
     }
@@ -160,6 +160,8 @@ impl Buffer {
             self.history.insert(0, Edit::default());    
             self.curr_edit += 1;
         }
+        // rebuild visual lines
+        self.build_visual_line();
     }
 
     pub fn redo(&mut self) {
@@ -171,6 +173,8 @@ impl Buffer {
         self.lines = edit.text.clone();
         self.cs    = edit.cs;
         edit.to_stash = true;
+        // rebuild visual lines
+        self.build_visual_line();
     }
 
     fn stash_edit(&mut self) {
