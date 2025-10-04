@@ -16,6 +16,7 @@ pub struct Buffer {
     history : Vec<Edit>,
 	// visual stuff - trying this out
 	pub visual : Vec<VisualLine>,
+    pub viewport : ViewPort,
 }
 
 pub enum Direction {
@@ -40,6 +41,7 @@ impl Buffer {
 			curr_edit : 1,
 			history : vec![Edit::default(), Edit::default()],
 			visual : vec![VisualLine::default()],
+            viewport : ViewPort::default(),
         };
         buf.build_visual_line();
 
@@ -51,7 +53,6 @@ impl Buffer {
         // inserting
         self.lines.insert_char(self.cs, char);
         self.cs += 1;
-        // self.cached_cx = self.get_cursor_pos().0 as usize;
         
         // stash edit + new edit if char is space or a newline 
         // ..or i was prev deleting chars
@@ -69,6 +70,9 @@ impl Buffer {
 
 		// doing this here at the end, when visual lines are up to date
 		self.cached_cx = self.get_cursor_pos().0 as usize;
+
+        //
+        self.fix_viewport();
     }
 
     pub fn delete(&mut self, amt: usize) {
@@ -95,6 +99,9 @@ impl Buffer {
 		// self.update_visual_line(false); 
         self.build_visual_line();
 
+        //
+        self.fix_viewport();
+
     }
 
     pub fn cursor_mv(&mut self, dir: Direction, amt: i32) {
@@ -106,30 +113,60 @@ impl Buffer {
         match dir {
             // has to cache the max cx
             Direction::Vert => {
-				let (_, cy) = self.get_cursor_pos();
-				// check top/bottom bounds
-				if cy + amt < 0 || cy + amt >= self.visual.len() as i32 { return; }
+                let (_, mut cy) = self.get_cursor_pos();
+                // check top/bottom bounds
+				if (cy + amt + self.viewport.offset as i32) < 0 
+                || (cy + amt + self.viewport.offset as i32) >= self.visual.len() as i32 
+                { 
+                    return; 
+                }
+                
+                // fix viewport 
+                let new_cy = if cy + amt < 0 || cy + amt > self.viewport.height as i32 -1 {
+                    self.viewport.offset = {
+                        if amt > 0 { self.viewport.offset +amt as usize}
+                        else { self.viewport.offset - (-amt) as usize }
+                    };
+                    cy
+                } else {
+                    cy + amt
+                };
+                
+                // get new cy abs value and not the one on screen (relative)
+                // let new_cy = cy + self.viewport.offset as i32 + amt;
 
-                let len = self.visual[(cy + amt) as usize].len;
-                let cx;
-                if len > self.cached_cx +1 { cx = self.cached_cx; }
-                // off by one mistake bc the last line dont have a newline char
-                else if cy + amt +1 == self.visual.len() as i32 { cx = len; }
-                else { cx = 1.max(len) -1; }
+                // now handle cx and its cached value
+                let len = self.visual[new_cy as usize + self.viewport.offset].len;
+                let cx = if len > self.cached_cx +1 { 
+                    self.cached_cx 
+                } else if new_cy +1 == self.visual.len() as i32 { 
+                    // off by one mistake bc the last line dont have a newline char
+                    len 
+                } else { 1.max(len) -1 };
 
-				// no cached_cx for now
-				self.cs = self.visual_to_rope(cx, (cy + amt) as usize);
+				self.cs = self.visual_to_rope(cx, new_cy as usize);
             },
             
             // horiz movmnt just has to check bounds
             Direction::Horiz => if self.cs as i32 + amt >= 0 && 
                 self.cs as i32 + amt <= self.lines.len_chars() as i32 
             {
+                // fix viewport
+                let (cx, cy) = self.get_cursor_pos();
+                if cy == 0 && cx + amt < 0 {
+                    self.viewport.offset -= 1;
+                } else if cy == self.viewport.height as i32 -1 && 
+                    cx + amt > self.visual[cy as usize + self.viewport.offset].len as i32 -1
+                {
+                    self.viewport.offset += 1;
+                }
+
                 self.cs = (amt + self.cs as i32) as usize;
                 // update the cached cx
                 self.cached_cx = self.get_cursor_pos().0 as usize;
             },
         }
+        // self.fix_viewport();
     }
 
     /// wrapper method to get the cursor (cx, cy) coords
@@ -137,6 +174,14 @@ impl Buffer {
 
 		let (cx, cy) = self.rope_to_visual(self.cs);
         (cx as i32,cy as i32)
+    }
+
+    /// fixes the viewport if the cursor is out of it
+    fn fix_viewport(&mut self) {
+        let cy = self.get_cursor_pos().1 as usize;
+        if cy > self.viewport.height -1 {
+            self.viewport.offset += cy - self.viewport.height +1;
+        }
     }
 
 	/*
@@ -202,12 +247,12 @@ impl Buffer {
 			cx -= self.visual[cy].len;
 			cy += 1;
 		}
-		(cx, cy)		
+		(cx, cy - self.viewport.offset)		
 	}
 
     /// convert (col, row) indexes to the corresponding Rope index
 	pub fn visual_to_rope(&self, cx : usize, cy : usize) -> usize {
-		let vl = self.visual[cy];
+		let vl = self.visual[cy + self.viewport.offset];
 		
 		// total offset from the beginning of the rope line
 		let tot_off = vl.offset + cx;
@@ -348,4 +393,21 @@ pub struct VisualLine {
 	offset  : usize,
 	pub len : usize,
 	pub rope    : usize,
+}
+
+/// struct that dictates the way visual lines are printed to fit
+/// the screen vertically.
+/// 
+/// offset points to the first visual line that should be printed
+#[derive(Clone, Copy, Debug)]
+pub struct ViewPort {
+	pub offset : usize,
+    _width      : usize,
+    pub height : usize,
+}
+
+impl Default for ViewPort {
+    fn default() -> Self {
+        ViewPort { offset: 0, _width: 20, height: 5 }
+    }
 }

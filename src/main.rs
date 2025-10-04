@@ -40,6 +40,7 @@ impl Default for Editor {
         comds.insert(Write.name(), Rc::new(command::Write));
         comds.insert(Quit.name(), Rc::new(Quit));
         comds.insert(Edit.name(), Rc::new(Edit));
+        comds.insert(Off.name(), Rc::new(Off));
 
         Self { bufs: Default::default(), 
             active_buf: Default::default(),
@@ -199,10 +200,14 @@ fn main() -> io::Result<()> {
             stdout,
             terminal::Clear(terminal::ClearType::All),
         )?;
-        for (i, vl) in buf.visual.iter().enumerate() {
+        // get visual lines in viewport
+        let vp_start = buf.viewport.offset;
+        let vp_end = buf.viewport.height + vp_start;
+        let vls = &buf.visual[vp_start .. vp_end.min(buf.visual.len())];
+
+        for (i, vl) in vls.iter().enumerate() {
 			
 			let start = buf.visual_to_rope(0, i);
-
 			queue!(
 				stdout,
                 MoveTo(0, i as u16),
@@ -232,7 +237,7 @@ fn main() -> io::Result<()> {
             // if mode isn't command, mouse pos if where it should be
             _ => {
                 let (cx, cy) = buf.get_cursor_pos();
-                stdout.queue(cursor::MoveTo(cx as u16 + buf.offset, cy as u16))?;        
+                stdout.queue(cursor::MoveTo(cx as u16 + buf.offset, cy as u16 /*- vp_start as u16*/))?;
             },
         }
 

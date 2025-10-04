@@ -129,6 +129,16 @@ impl Command for Edit {
     }
 }
 
+pub struct Off;
+impl Command for Off {
+    fn name(&self) -> &'static str { "o" }
+    fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
+        
+        ed.bufs[ed.active_buf].viewport.offset = args[1].parse().unwrap();
+        Ok(())
+    }
+}
+
 /// helper fn to convert errors nicely and reduce code verbosity
 fn convert_res<T>(res : std::io::Result<T>) -> Result<T, String> {
     match res {
