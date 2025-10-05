@@ -336,12 +336,12 @@ impl Buffer {
 
                 while rope_len > 0 {
                     let new_vis = VisualLine {
-                        offset, len : 20.min(rope_len), rope : i
+                        offset, len : self.viewport.width.min(rope_len), rope : i
                     };
                     vec.push(new_vis);
                     
                     rope_len -= new_vis.len;
-                    offset   += 20;
+                    offset   += self.viewport.width;
                 }
                 // edge case
                 if line.len_chars() == 0 {
@@ -391,12 +391,12 @@ pub struct VisualLine {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ViewPort {
 	pub offset : usize,
-    _width     : usize,
+    width     : usize,
     pub height : usize,
 }
 
 impl Default for ViewPort {
     fn default() -> Self {
-        ViewPort { offset: 0, _width: 20, height: 5 }
+        ViewPort { offset: 0, width: 40, height: 30 }
     }
 }
