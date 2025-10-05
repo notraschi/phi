@@ -1,7 +1,8 @@
 /*
 *
 * hopefully this will be a fun project that will actually be compleated one day..
-*
+* 
+* officially functioning!
 */
 
 
