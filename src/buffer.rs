@@ -24,7 +24,7 @@ pub enum Direction {
     Horiz
 }
 
-#[allow(unused)]
+// #[allow(unused)]
 impl Buffer {
 
     pub fn new() -> Buffer {
@@ -52,27 +52,23 @@ impl Buffer {
         
         // inserting
         self.lines.insert_char(self.cs, char);
-        self.cs += 1;
+        // self.cs += 1;
+        
+		// visual lines
+        self.build_visual_line();
+        // 
+        // self.fix_viewport(true);
+        self.cursor_mv(Direction::Horiz, 1);
+		// doing this when visual lines are up to date
+		self.cached_cx = self.get_cursor_pos().0 as usize;        
         
         // stash edit + new edit if char is space or a newline 
         // ..or i was prev deleting chars
         if char == ' ' || char == '\n' || self.history[self.curr_edit].to_stash { 
-            self.stash_edit(); 
+            self.new_edit(); 
         }
-        //  append to the curr edit
-        let edit = &mut self.history[self.curr_edit];
-        edit.text = self.lines.clone();
-        edit.cs   = self.cs;
-        edit.to_stash = false;
-
-		// try out the new visual line stuff..
-        self.build_visual_line();
-
-		// doing this here at the end, when visual lines are up to date
-		self.cached_cx = self.get_cursor_pos().0 as usize;
-
-        //
-        self.fix_viewport();
+        // append to the curr edit
+        self.update_edit(false);
     }
 
     pub fn delete(&mut self, amt: usize) {
@@ -80,48 +76,40 @@ impl Buffer {
         // bounds check
         if self.cs < amt { return; }
 
-        self.lines.remove(self.cs - amt .. self.cs);
+        // clever trick to simplify deleting chars: mv cursor first
+        self.cursor_mv(Direction::Horiz, -(amt as i32));
+        //
+        self.lines.remove(self.cs .. self.cs + amt);
         
-        self.cs -= amt;
-        self.cached_cx = self.get_cursor_pos().0 as usize;
-
+		// visual line stuff
+        self.build_visual_line();
+        
         // stash edit 
         if !self.history[self.curr_edit].to_stash {
-            self.stash_edit();
+            self.new_edit();
         }
         //  append to the curr edit
-        let edit = &mut self.history[self.curr_edit];
-        edit.text = self.lines.clone();
-        edit.cs   = self.cs;
-        edit.to_stash = true;       
-
-		// visual line stuff
-		// self.update_visual_line(false); 
-        self.build_visual_line();
-
-        //
-        self.fix_viewport();
-
+        self.update_edit(true);  
     }
 
     pub fn cursor_mv(&mut self, dir: Direction, amt: i32) {
 
         if self.history[self.curr_edit].text.len_chars() > 0 {
-            self.stash_edit();
+            self.new_edit();
         }
         //
         match dir {
             // has to cache the max cx
             Direction::Vert => {
-                let (_, mut cy) = self.get_cursor_pos();
+                let (_, cy) = self.get_cursor_pos();
                 // check top/bottom bounds
 				if (cy + amt + self.viewport.offset as i32) < 0 
-                || (cy + amt + self.viewport.offset as i32) >= self.visual.len() as i32 
+                    || (cy + amt + self.viewport.offset as i32) >= self.visual.len() as i32 
                 { 
                     return; 
                 }
                 
-                // fix viewport 
+                // fix viewport: cy
                 let new_cy = if cy + amt < 0 || cy + amt > self.viewport.height as i32 -1 {
                     self.viewport.offset = {
                         if amt > 0 { self.viewport.offset +amt as usize}
@@ -132,9 +120,6 @@ impl Buffer {
                     cy + amt
                 };
                 
-                // get new cy abs value and not the one on screen (relative)
-                // let new_cy = cy + self.viewport.offset as i32 + amt;
-
                 // now handle cx and its cached value
                 let len = self.visual[new_cy as usize + self.viewport.offset].len;
                 let cx = if len > self.cached_cx +1 { 
@@ -146,14 +131,18 @@ impl Buffer {
 
 				self.cs = self.visual_to_rope(cx, new_cy as usize);
             },
-            
-            // horiz movmnt just has to check bounds
-            Direction::Horiz => if self.cs as i32 + amt >= 0 && 
-                self.cs as i32 + amt <= self.lines.len_chars() as i32 
-            {
+            Direction::Horiz => {
+                // check bounds
+                if self.cs as i32 + amt < 0 ||
+                    self.cs as i32 + amt > self.lines.len_chars() as i32
+                    // special case: deleting a char at the end of rope
+                {
+                    return;
+                } 
+
                 // fix viewport
                 let (cx, cy) = self.get_cursor_pos();
-                if cy == 0 && cx + amt < 0 {
+                if cy == 0 && cx + amt < 0 && self.viewport.offset > 0 {
                     self.viewport.offset -= 1;
                 } else if cy == self.viewport.height as i32 -1 && 
                     cx + amt > self.visual[cy as usize + self.viewport.offset].len as i32 -1
@@ -177,12 +166,12 @@ impl Buffer {
     }
 
     /// fixes the viewport if the cursor is out of it
-    fn fix_viewport(&mut self) {
-        let cy = self.get_cursor_pos().1 as usize;
-        if cy > self.viewport.height -1 {
-            self.viewport.offset += cy - self.viewport.height +1;
-        }
-    }
+    // fn fix_viewport(&mut self, insert: bool) {
+    //     let cy = self.get_cursor_pos().1 as usize;
+    //     if cy > self.viewport.height -1 {
+    //         self.viewport.offset += cy - self.viewport.height +1;
+    //     } 
+    // }
 
 	/*
 	*	section related to undo/redo stuff
@@ -193,6 +182,7 @@ impl Buffer {
         let edit = &self.history[self.curr_edit];
         self.lines = edit.text.clone();
         self.cs = edit.cs;
+        self.viewport = edit.viewport;
 
         // base edit stuff
         if self.curr_edit == 0 {
@@ -211,17 +201,26 @@ impl Buffer {
         let edit = &mut self.history[self.curr_edit];
         self.lines = edit.text.clone();
         self.cs    = edit.cs;
+        self.viewport = edit.viewport;
         edit.to_stash = true;
         // rebuild visual lines
         self.build_visual_line();
     }
 
-    fn stash_edit(&mut self) {
+    fn new_edit(&mut self) {
         self.history[self.curr_edit].to_stash = false;
         //
         self.curr_edit += 1;
         self.history.truncate(self.curr_edit);
-        self.history.push(Edit::new(self.cs));
+        self.history.push(Edit::new(self.cs, self.viewport));
+    }
+
+    fn update_edit(&mut self, to_stash : bool) {
+        let edit = &mut self.history[self.curr_edit];
+        edit.text = self.lines.clone();
+        edit.cs   = self.cs;
+        edit.to_stash = to_stash; 
+        edit.viewport = self.viewport; 
     }
 
 	/*
@@ -379,12 +378,17 @@ struct Edit {
     text      : ropey::Rope,
     cs        : usize,
     to_stash  : bool,
+    viewport   : ViewPort,
 }
 
 impl Edit {
     
-    fn new(cs : usize) -> Self {
-        Edit { text: ropey::Rope::new(), cs, to_stash : false }
+    fn new(cs : usize, viewport : ViewPort) -> Self {
+        Edit { 
+            text: ropey::Rope::new(), 
+            cs, to_stash : false ,
+            viewport,
+        }
     }
 }
 
@@ -402,7 +406,7 @@ pub struct VisualLine {
 #[derive(Clone, Copy, Debug)]
 pub struct ViewPort {
 	pub offset : usize,
-    _width      : usize,
+    _width     : usize,
     pub height : usize,
 }
 

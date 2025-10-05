@@ -172,7 +172,7 @@ fn handle_command_mode(ed : &mut Editor, e : KeyCode) {
 */
 fn main() -> io::Result<()> {
 
-	// std::env::set_var("RUST_BACKTRACE", "1");
+	std::env::set_var("RUST_BACKTRACE", "1");
     // begin
     let mut stdout = io::stdout();
     terminal::enable_raw_mode()?;
