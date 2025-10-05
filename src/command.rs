@@ -80,7 +80,6 @@ pub struct Write;
 impl Command for Write {
     fn name(&self) -> &'static str { "w" }
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
-
         if args.len() > 1 { return Err("too many args".to_owned()); }
 
         let buf = &ed.bufs[ed.active_buf];
@@ -99,7 +98,9 @@ impl Command for Write {
 pub struct Quit;
 impl Command for Quit {
     fn name(&self) -> &'static str { "q" }
-    fn run(&self, _args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
+    fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
+        if args.len() > 1 { return Err("too many args".to_owned()); }
+
         convert_res(crossterm::execute!(
             std::io::stdout(), 
             crossterm::terminal::LeaveAlternateScreen
@@ -115,6 +116,7 @@ pub struct Edit;
 impl Command for Edit {
     fn name(&self) -> &'static str { "e" }
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
+        if args.len() > 2 { return Err("too many args".to_owned()); }
         
         let reader = std::io::BufReader::new(
             convert_res(std::fs::File::open(args[1].to_owned()))?
@@ -129,12 +131,24 @@ impl Command for Edit {
     }
 }
 
-pub struct Off;
-impl Command for Off {
-    fn name(&self) -> &'static str { "o" }
+/// same as hitting the undo button, maybe useful someday
+pub struct Undo;
+impl Command for Undo {
+    fn name(&self) -> &'static str { "undo" }
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
-        
-        ed.bufs[ed.active_buf].viewport.offset = args[1].parse().unwrap();
+        if args.len() > 1 { return Err("too many args".to_owned()); }
+        ed.bufs[ed.active_buf].undo();
+        Ok(())
+    }
+}
+
+/// same as hitting the redo button, maybe useful someday
+pub struct Redo;
+impl Command for Redo {
+    fn name(&self) -> &'static str { "redo" }
+    fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
+        if args.len() > 1 { return Err("too many args".to_owned()); }
+        ed.bufs[ed.active_buf].redo();
         Ok(())
     }
 }

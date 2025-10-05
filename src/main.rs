@@ -41,7 +41,8 @@ impl Default for Editor {
         comds.insert(Write.name(), Rc::new(command::Write));
         comds.insert(Quit.name(), Rc::new(Quit));
         comds.insert(Edit.name(), Rc::new(Edit));
-        comds.insert(Off.name(), Rc::new(Off));
+        comds.insert(Undo.name(), Rc::new(Undo));
+        comds.insert(Redo.name(), Rc::new(Redo));
 
         Self { bufs: Default::default(), 
             active_buf: Default::default(),
