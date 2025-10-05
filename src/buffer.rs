@@ -58,7 +58,7 @@ impl Buffer {
         self.build_visual_line();
         // 
         // self.fix_viewport(true);
-        self.cursor_mv(Direction::Horiz, 1);
+        self.cursor_mv(Direction::Horiz, 1, false);
 		// doing this when visual lines are up to date
 		self.cached_cx = self.get_cursor_pos().0 as usize;        
         
@@ -77,7 +77,7 @@ impl Buffer {
         if self.cs < amt { return; }
 
         // clever trick to simplify deleting chars: mv cursor first
-        self.cursor_mv(Direction::Horiz, -(amt as i32));
+        self.cursor_mv(Direction::Horiz, -(amt as i32), false);
         //
         self.lines.remove(self.cs .. self.cs + amt);
         
@@ -92,12 +92,11 @@ impl Buffer {
         self.update_edit(true);  
     }
 
-    pub fn cursor_mv(&mut self, dir: Direction, amt: i32) {
+    pub fn cursor_mv(&mut self, dir: Direction, amt: i32, new_edit : bool) {
 
-        if self.history[self.curr_edit].text.len_chars() > 0 {
+        if self.history[self.curr_edit].text.len_chars() > 0 && new_edit{
             self.new_edit();
         }
-        //
         match dir {
             // has to cache the max cx
             Direction::Vert => {
@@ -107,8 +106,7 @@ impl Buffer {
                     || (cy + amt + self.viewport.offset as i32) >= self.visual.len() as i32 
                 { 
                     return; 
-                }
-                
+                }                
                 // fix viewport: cy
                 let new_cy = if cy + amt < 0 || cy + amt > self.viewport.height as i32 -1 {
                     self.viewport.offset = {
@@ -119,7 +117,6 @@ impl Buffer {
                 } else {
                     cy + amt
                 };
-                
                 // now handle cx and its cached value
                 let len = self.visual[new_cy as usize + self.viewport.offset].len;
                 let cx = if len > self.cached_cx +1 { 
@@ -139,7 +136,6 @@ impl Buffer {
                 {
                     return;
                 } 
-
                 // fix viewport
                 let (cx, cy) = self.get_cursor_pos();
                 if cy == 0 && cx + amt < 0 && self.viewport.offset > 0 {
@@ -164,14 +160,6 @@ impl Buffer {
 		let (cx, cy) = self.rope_to_visual(self.cs);
         (cx as i32,cy as i32)
     }
-
-    /// fixes the viewport if the cursor is out of it
-    // fn fix_viewport(&mut self, insert: bool) {
-    //     let cy = self.get_cursor_pos().1 as usize;
-    //     if cy > self.viewport.height -1 {
-    //         self.viewport.offset += cy - self.viewport.height +1;
-    //     } 
-    // }
 
 	/*
 	*	section related to undo/redo stuff

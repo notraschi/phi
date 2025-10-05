@@ -116,10 +116,10 @@ fn handle_insert_mode(ed : &mut Editor, e : KeyEvent) -> io::Result<()> {
                 KeyCode::PageUp => buf.redo(),
                 
                 // arrow keys
-                KeyCode::Up => buf.cursor_mv(Direction::Vert, -1),
-                KeyCode::Down => buf.cursor_mv(Direction::Vert, 1),
-                KeyCode::Right => buf.cursor_mv(Direction::Horiz, 1),
-                KeyCode::Left => buf.cursor_mv(Direction::Horiz, -1),
+                KeyCode::Up => buf.cursor_mv(Direction::Vert, -1, true),
+                KeyCode::Down => buf.cursor_mv(Direction::Vert, 1, true),
+                KeyCode::Right => buf.cursor_mv(Direction::Horiz, 1, true),
+                KeyCode::Left => buf.cursor_mv(Direction::Horiz, -1, true),
                 
                 _ => {} 
             }
