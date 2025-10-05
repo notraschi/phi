@@ -204,6 +204,11 @@ fn main() -> io::Result<()> {
         // get visual lines in viewport
         let vp_start = buf.viewport.offset;
         let vp_end = buf.viewport.height + vp_start;
+
+        // if vp_end.min(buf.visual.len()) < vp_start {
+        //     panic!("dioboia: {:?}")
+        // }
+
         let vls = &buf.visual[vp_start .. vp_end.min(buf.visual.len())];
 
         for (i, vl) in vls.iter().enumerate() {

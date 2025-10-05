@@ -201,6 +201,12 @@ impl Buffer {
     }
 
     fn new_edit(&mut self) {
+        // dont leave blank edits!
+        if self.history.len() > 1 && 
+            self.history[self.curr_edit].text.len_chars() == 0 
+        {
+            return;
+        }
         self.history[self.curr_edit].to_stash = false;
         //
         self.curr_edit += 1;
@@ -348,7 +354,7 @@ impl Buffer {
     }
 }
 
-#[derive(Default)]
+#[derive(PartialEq, Eq)]
 struct Edit {
     text      : ropey::Rope,
     cs        : usize,
@@ -365,28 +371,32 @@ impl Edit {
             viewport,
         }
     }
+
+    fn default() -> Self {
+        Edit::new(0, ViewPort::default())
+    }
 }
 
 #[derive(Default, Clone, Copy, Debug)]
 pub struct VisualLine {
-	offset  : usize,
-	pub len : usize,
-	pub rope    : usize,
+	offset   : usize,
+	pub len  : usize,
+	pub rope : usize,
 }
 
 /// struct that dictates the way visual lines are printed to fit
 /// the screen vertically.
 /// 
 /// offset points to the first visual line that should be printed
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ViewPort {
 	pub offset : usize,
-    width     : usize,
+    _width     : usize,
     pub height : usize,
 }
 
 impl Default for ViewPort {
     fn default() -> Self {
-        ViewPort { offset: 0, width: 20, height: 5 }
+        ViewPort { offset: 0, _width: 20, height: 5 }
     }
 }
