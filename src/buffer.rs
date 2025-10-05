@@ -83,6 +83,11 @@ impl Buffer {
         
 		// visual line stuff
         self.build_visual_line();
+
+        // fix offset on a corner case
+        if self.viewport.offset == self.visual.len() {
+            self.viewport.offset -= 1;
+        }
         
         // stash edit 
         if !self.history[self.curr_edit].to_stash {
@@ -249,85 +254,67 @@ impl Buffer {
 
     /// update visual line after the insertion/deletion of a *single* char.
     /// runs in constant time, cant delete/insert visual lines
-	fn update_visual_line(&mut self, insert: bool) {
-		// getting last visual line related to current rope line
-		let (_, mut last) = self.rope_to_visual(self.cs);
-		let rope = self.visual[last].rope;
-		while last < self.visual.len() && self.visual[last].rope == rope {
-			last += 1;
-		}
-		last -= 1;
-
-		// len is capped at 20 chars long!!!!!
-		if insert {
-			if self.visual[last].len < 20 {
-				self.visual[last].len += 1;
-			} else {
-				let new_vis = VisualLine {
-					offset : self.visual[last].offset +20, 
-					len : 1,
-					rope,
-				};
-				self.visual.insert(last +1, new_vis);
-			}
-		} else {
-			if self.visual[last].len > 1 
-				|| (self.visual.len() == 1 && self.visual[last].len > 0) {
-				self.visual[last].len -= 1;
-			} else if self.visual.len() > 1 {
-				let _ = self.visual.remove(last);
-			} 
-		}
-	}
+	// fn update_visual_line(&mut self, insert: bool) {
+    //     let (cx, cy) = self.rope_to_visual(self.cs);
+    //     let abs_cy = cy + self.viewport.offset;
+    //     if insert {
+    //
+    //     } else {
+    //         if 0 == 0 { self.build_visual_line(); }
+    //         else {
+    //             self.visual[abs_cy].len -= 1;
+    //         }
+    //     }
+	// }
 
     /// handles the case of a newline
-	fn newline_visual_line(&mut self, og_rope : usize) {
-		// len is capped at 20 chars long!!!
-
-		// get first visual line
-		let mut cy = og_rope;
-		while self.visual[cy].rope != og_rope {
-			cy += 1;
-		}
-		// rewrap the og line
-		// NOTE: og rope line len will be shorter now
-		let mut rope_len = self.lines.line(og_rope).len_chars();
-		while rope_len > 0 {
-			self.visual[cy].len = 20.min(rope_len);
-			rope_len -= self.visual[cy].len;
-			cy += 1;
-		}
-		
-		// og rope line wrapping is terminated, now the new rope line
-		// we being using visual lines referring to the og rope line
-		// if needed we insert a new visual line
-		let mut rope_len = self.lines.line(og_rope +1).len_chars();
-		let mut offset = 0;
-		while rope_len > 0 {
-			// having to insert a new visualline, updating isnt enougth
-			if cy == self.visual.len() || self.visual[cy].rope != og_rope {
-				// in case of insertion, at most one line is added
-				// this happens therefore at the last iteration
-				let new_vis = VisualLine {
-					offset, len : rope_len, rope : og_rope +1 // will be updated at the end
-				};
-				self.visual.insert(cy, new_vis);
-				rope_len = 0;
-			} else {
-				self.visual[cy].offset = offset;
-				self.visual[cy].len    = 20.min(rope_len);
-				self.visual[cy].rope   = og_rope +1; // will be updated at the end
-
-				rope_len -= self.visual[cy].len;
-				offset += 20;
-			}
-			cy += 1;
-		}
-		// now its time to update all the 'rope' fields
-		for i in cy .. self.visual.len() {
-			self.visual[i].rope += 1;
-		}
-	}
+	// fn newline_visual_line(&mut self, og_rope : usize) {
+	// 	// len is capped at 20 chars long!!!
+    //
+	// 	// get first visual line
+	// 	let mut cy = og_rope;
+	// 	while self.visual[cy].rope != og_rope {
+	// 		cy += 1;
+	// 	}
+	// 	// rewrap the og line
+	// 	// NOTE: og rope line len will be shorter now
+	// 	let mut rope_len = self.lines.line(og_rope).len_chars();
+	// 	while rope_len > 0 {
+	// 		self.visual[cy].len = 20.min(rope_len);
+	// 		rope_len -= self.visual[cy].len;
+	// 		cy += 1;
+	// 	}
+	//	
+	// 	// og rope line wrapping is terminated, now the new rope line
+	// 	// we being using visual lines referring to the og rope line
+	// 	// if needed we insert a new visual line
+	// 	let mut rope_len = self.lines.line(og_rope +1).len_chars();
+	// 	let mut offset = 0;
+	// 	while rope_len > 0 {
+	// 		// having to insert a new visualline, updating isnt enougth
+	// 		if cy == self.visual.len() || self.visual[cy].rope != og_rope {
+	// 			// in case of insertion, at most one line is added
+	// 			// this happens therefore at the last iteration
+	// 			let new_vis = VisualLine {
+	// 				offset, len : rope_len, rope : og_rope +1 // will be updated at the end
+	// 			};
+	// 			self.visual.insert(cy, new_vis);
+	// 			rope_len = 0;
+	// 		} else {
+	// 			self.visual[cy].offset = offset;
+	// 			self.visual[cy].len    = 20.min(rope_len);
+	// 			self.visual[cy].rope   = og_rope +1; // will be updated at the end
+    //
+	// 			rope_len -= self.visual[cy].len;
+	// 			offset += 20;
+	// 		}
+	// 		cy += 1;
+	// 	}
+	// 	// now its time to update all the 'rope' fields
+	// 	for i in cy .. self.visual.len() {
+	// 		self.visual[i].rope += 1;
+	// 	}
+	// }
 
     /// completely rebuilds self.visual.
     /// *can* deal with terminal copy/paste correctly
@@ -394,12 +381,12 @@ pub struct VisualLine {
 #[derive(Clone, Copy, Debug)]
 pub struct ViewPort {
 	pub offset : usize,
-    _width     : usize,
+    width     : usize,
     pub height : usize,
 }
 
 impl Default for ViewPort {
     fn default() -> Self {
-        ViewPort { offset: 0, _width: 20, height: 5 }
+        ViewPort { offset: 0, width: 20, height: 5 }
     }
 }
