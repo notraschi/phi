@@ -131,6 +131,26 @@ impl Command for Edit {
     }
 }
 
+/// loads an existing file into a new buffer and sets it as the active one.
+pub struct SwitchBuffer;
+impl Command for SwitchBuffer {
+    fn name(&self) -> &'static str { "b" }
+    fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
+        if args.len() > 2 { return Err("too many args".to_owned()); }
+        match args[1].parse::<usize>() {
+            Err(e) => return Err("invalid argument".to_owned()),
+            Ok(v)  => {
+                if v >= ed.bufs.len() {
+                    return Err("that buffer isnt open".to_owned());
+                } else {
+                    ed.active_buf = v;
+                    Ok(())
+                }
+            },
+        }
+    }
+}
+
 /// same as hitting the undo button, maybe useful someday
 pub struct Undo;
 impl Command for Undo {

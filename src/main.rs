@@ -43,6 +43,7 @@ impl Default for Editor {
         comds.insert(Edit.name(), Rc::new(Edit));
         comds.insert(Undo.name(), Rc::new(Undo));
         comds.insert(Redo.name(), Rc::new(Redo));
+        comds.insert(SwitchBuffer.name(), Rc::new(SwitchBuffer));
 
         Self { bufs: Default::default(), 
             active_buf: Default::default(),

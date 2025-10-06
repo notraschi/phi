@@ -52,15 +52,13 @@ impl Buffer {
         
         // inserting
         self.lines.insert_char(self.cs, char);
-        // self.cs += 1;
-        
 		// visual lines
         self.build_visual_line();
         // 
         // self.fix_viewport(true);
         self.cursor_mv(Direction::Horiz, 1, false);
 		// doing this when visual lines are up to date
-		self.cached_cx = self.get_cursor_pos().0 as usize;        
+		// self.cached_cx = self.get_cursor_pos().0 as usize;        
         
         // stash edit + new edit if char is space or a newline 
         // ..or i was prev deleting chars
@@ -88,7 +86,6 @@ impl Buffer {
         if self.viewport.offset == self.visual.len() {
             self.viewport.offset -= 1;
         }
-        
         // stash edit 
         if !self.history[self.curr_edit].to_stash {
             self.new_edit();
