@@ -157,10 +157,14 @@ impl Buffer {
     }
 
     /// wrapper method to get the cursor (cx, cy) coords
+    /// 
+    /// **NOTE**: cy is the *relative* position, meaning it takes
+    /// into account the viewport offset
     pub fn get_cursor_pos(&self) -> (i32, i32) {
 
 		let (cx, cy) = self.rope_to_visual(self.cs);
-        (cx as i32,cy as i32)
+        // convert to relative cy
+        (cx as i32,(cy - self.viewport.offset) as i32)
     }
 
 	/*
@@ -224,6 +228,8 @@ impl Buffer {
 	*/
     /// converts between index in the Rope to indexes (col, row).
     /// panics if indexes cant be found.
+    /// 
+    /// **NOTE**: cy is the absolute value, unrealated to the viewport!
 	fn rope_to_visual(&self, cs : usize) -> (usize, usize) {
 
         // get first visual line referring to corresponding rope line
@@ -242,7 +248,7 @@ impl Buffer {
 			cx -= self.visual[cy].len;
 			cy += 1;
 		}
-		(cx, cy - self.viewport.offset)		
+		(cx, cy /*- self.viewport.offset*/)		
 	}
 
     /// convert (col, row) indexes to the corresponding Rope index
@@ -258,7 +264,7 @@ impl Buffer {
     /// update visual line after the insertion/deletion of a *single* char.
     /// runs in constant time, cant delete/insert visual lines
 	// fn update_visual_line(&mut self, insert: bool) {
-    //     let (cx, cy) = self.rope_to_visual(self.cs);
+    //     let (cx, cy) = self.get_cursor_pos();
     //     let abs_cy = cy + self.viewport.offset;
     //     if insert {
     //
@@ -394,6 +400,6 @@ pub struct ViewPort {
 
 impl Default for ViewPort {
     fn default() -> Self {
-        ViewPort { offset: 0, width: 40, height: 30 }
+        ViewPort { offset: 0, width: 10, height: 5 }
     }
 }
