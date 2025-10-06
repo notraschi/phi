@@ -26,11 +26,14 @@ pub enum Direction {
 
 // #[allow(unused)]
 impl Buffer {
-    pub fn new() -> Buffer {
-        Buffer::open("new-file.md".to_owned(), ropey::Rope::new())
+    pub fn new(w: usize, h: usize) -> Buffer {
+        Buffer::open("new-file.md".to_owned(), 
+            ropey::Rope::new(),
+            w, h
+        )
     }
 
-    pub fn open(filename : String, ctx : ropey::Rope) -> Buffer {
+    pub fn open(filename : String, ctx : ropey::Rope, w: usize, h: usize) -> Buffer {
         let mut  buf = Buffer { 
 			lines: ctx, 
 			filename,
@@ -40,7 +43,7 @@ impl Buffer {
 			curr_edit : 1,
 			history : vec![Edit::default(), Edit::default()],
 			visual : vec![VisualLine::default()],
-            viewport : ViewPort::default(),
+            viewport : ViewPort::new(w, h),
         };
         buf.build_visual_line();
 
@@ -314,7 +317,7 @@ impl Buffer {
     */
     /// ensures buffer resizing is done correctly
     pub fn resize(&mut self, width : usize, height : usize) {
-        self.viewport.width = width;
+        self.viewport.width = width - self.offset as usize -1;
         self.viewport.height = height;
         // 
         self.viewport_fix_offset();
@@ -371,8 +374,8 @@ pub struct ViewPort {
     pub height : usize,
 }
 
-impl Default for ViewPort {
-    fn default() -> Self {
-        ViewPort { offset: 0, width: 10, height: 5 }
+impl ViewPort {
+    fn new(width : usize, height : usize) -> Self {
+        ViewPort { offset: 0, width, height}
     }
 }

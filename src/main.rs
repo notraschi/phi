@@ -59,11 +59,18 @@ impl Default for Editor {
 
 impl Editor {
 
-    // adds an empty buffer to the editor
+    /// adds an empty buffer to the editor
     fn new_buf(&mut self) {
-        self.bufs.push(
-            Buffer::new()
-        );
+        let (w, h) = self.get_size();
+        self.bufs.push(Buffer::new(w, h));
+        self.active_buf = self.bufs.len() -1;
+    }
+
+    /// gets the editor size in a nice way, 
+    /// used to resize buffers nicely
+    fn get_size(&self) -> (usize, usize){
+        let (w, h) = size().unwrap();
+        (w as usize, h as usize -3)
     }
 }
 
@@ -258,7 +265,7 @@ fn main() -> io::Result<()> {
             }
             crossterm::event::Event::Resize(w, h) => {
                 for buf in &mut ed.bufs {
-                    buf.resize((w - buf.offset -1) as usize, h as usize -3);
+                    buf.resize((w) as usize, h as usize -3);
                 }
             }
             _ => {}

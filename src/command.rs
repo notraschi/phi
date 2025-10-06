@@ -121,9 +121,10 @@ impl Command for Edit {
         let reader = std::io::BufReader::new(
             convert_res(std::fs::File::open(args[1].to_owned()))?
         );
-
+        let (w, h) = ed.get_size();
         ed.bufs.push(Buffer::open(args[1].clone(),
-            convert_res(ropey::Rope::from_reader(reader))?
+            convert_res(ropey::Rope::from_reader(reader))?,
+            w, h
         ));
         ed.active_buf = ed.bufs.len() -1; 
 
