@@ -43,6 +43,7 @@ impl Default for Editor {
         comds.insert(Edit.name(), Rc::new(Edit));
         comds.insert(Undo.name(), Rc::new(Undo));
         comds.insert(Redo.name(), Rc::new(Redo));
+        comds.insert(Test.name(), Rc::new(Test));
         comds.insert(SwitchBuffer.name(), Rc::new(SwitchBuffer));
 
         Self { bufs: Default::default(), 
@@ -207,10 +208,6 @@ fn main() -> io::Result<()> {
         let vp_start = buf.viewport.offset;
         let vp_end = buf.viewport.height + vp_start;
 
-        // if vp_end.min(buf.visual.len()) < vp_start {
-        //     panic!("dioboia: {:?}")
-        // }
-
         let vls = &buf.visual[vp_start .. vp_end.min(buf.visual.len())];
 
         for (i, vl) in vls.iter().enumerate() {
@@ -258,6 +255,11 @@ fn main() -> io::Result<()> {
                 Mode::Command => handle_command_mode(&mut ed, e.code),
                 Mode::Insert => handle_insert_mode(&mut ed, e)?,
                 Mode::Normal => {},
+            }
+            crossterm::event::Event::Resize(w, h) => {
+                for buf in &mut ed.bufs {
+                    buf.resize((w - buf.offset -1) as usize, h as usize -3);
+                }
             }
             _ => {}
         }

@@ -173,6 +173,17 @@ impl Command for Redo {
     }
 }
 
+/// used for testing features
+pub struct Test;
+impl Command for Test {
+    fn name(&self) -> &'static str { "t" }
+    fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
+        let buf = &mut ed.bufs[ed.active_buf];
+        buf.resize(args[1].parse().unwrap(), args[2].parse().unwrap());
+        Ok(())
+    }
+}
+
 /// helper fn to convert errors nicely and reduce code verbosity
 fn convert_res<T>(res : std::io::Result<T>) -> Result<T, String> {
     match res {

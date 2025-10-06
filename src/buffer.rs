@@ -26,7 +26,6 @@ pub enum Direction {
 
 // #[allow(unused)]
 impl Buffer {
-
     pub fn new() -> Buffer {
         Buffer::open("new-file.md".to_owned(), ropey::Rope::new())
     }
@@ -94,6 +93,8 @@ impl Buffer {
         self.update_edit(true);  
     }
 
+    /// **NOTE**: aside from undo actions (and the tiny if on delete), 
+    /// only this fn updates the viewport
     pub fn cursor_mv(&mut self, dir: Direction, amt: i32, new_edit : bool) {
 
         if self.history[self.curr_edit].text.len_chars() > 0 && new_edit{
@@ -153,7 +154,6 @@ impl Buffer {
                 self.cached_cx = self.get_cursor_pos().0 as usize;
             },
         }
-        // self.fix_viewport();
     }
 
     /// wrapper method to get the cursor (cx, cy) coords
@@ -164,7 +164,7 @@ impl Buffer {
 
 		let (cx, cy) = self.rope_to_visual(self.cs);
         // convert to relative cy
-        (cx as i32,(cy - self.viewport.offset) as i32)
+        (cx as i32, cy as i32 - self.viewport.offset as i32)
     }
 
 	/*
@@ -176,15 +176,16 @@ impl Buffer {
         let edit = &self.history[self.curr_edit];
         self.lines = edit.text.clone();
         self.cs = edit.cs;
-        self.viewport = edit.viewport;
-
+        self.viewport.offset = edit.vp_off;
+        
         // base edit stuff
         if self.curr_edit == 0 {
             self.history.insert(0, Edit::default());    
             self.curr_edit += 1;
         }
-        // rebuild visual lines
-        self.build_visual_line();
+        // // rebuild visual lines
+        // self.build_visual_line();
+        self.viewport_fix_offset();
     }
 
     pub fn redo(&mut self) {
@@ -195,10 +196,11 @@ impl Buffer {
         let edit = &mut self.history[self.curr_edit];
         self.lines = edit.text.clone();
         self.cs    = edit.cs;
-        self.viewport = edit.viewport;
+        self.viewport.offset = edit.vp_off;
         edit.to_stash = true;
         // rebuild visual lines
-        self.build_visual_line();
+        // self.build_visual_line();
+        self.viewport_fix_offset();
     }
 
     fn new_edit(&mut self) {
@@ -212,7 +214,7 @@ impl Buffer {
         //
         self.curr_edit += 1;
         self.history.truncate(self.curr_edit);
-        self.history.push(Edit::new(self.cs, self.viewport));
+        self.history.push(Edit::new(self.cs, self.viewport.offset));
     }
 
     fn update_edit(&mut self, to_stash : bool) {
@@ -220,7 +222,7 @@ impl Buffer {
         edit.text = self.lines.clone();
         edit.cs   = self.cs;
         edit.to_stash = to_stash; 
-        edit.viewport = self.viewport; 
+        edit.vp_off = self.viewport.offset; 
     }
 
 	/*
@@ -276,55 +278,6 @@ impl Buffer {
     //     }
 	// }
 
-    /// handles the case of a newline
-	// fn newline_visual_line(&mut self, og_rope : usize) {
-	// 	// len is capped at 20 chars long!!!
-    //
-	// 	// get first visual line
-	// 	let mut cy = og_rope;
-	// 	while self.visual[cy].rope != og_rope {
-	// 		cy += 1;
-	// 	}
-	// 	// rewrap the og line
-	// 	// NOTE: og rope line len will be shorter now
-	// 	let mut rope_len = self.lines.line(og_rope).len_chars();
-	// 	while rope_len > 0 {
-	// 		self.visual[cy].len = 20.min(rope_len);
-	// 		rope_len -= self.visual[cy].len;
-	// 		cy += 1;
-	// 	}
-	//	
-	// 	// og rope line wrapping is terminated, now the new rope line
-	// 	// we being using visual lines referring to the og rope line
-	// 	// if needed we insert a new visual line
-	// 	let mut rope_len = self.lines.line(og_rope +1).len_chars();
-	// 	let mut offset = 0;
-	// 	while rope_len > 0 {
-	// 		// having to insert a new visualline, updating isnt enougth
-	// 		if cy == self.visual.len() || self.visual[cy].rope != og_rope {
-	// 			// in case of insertion, at most one line is added
-	// 			// this happens therefore at the last iteration
-	// 			let new_vis = VisualLine {
-	// 				offset, len : rope_len, rope : og_rope +1 // will be updated at the end
-	// 			};
-	// 			self.visual.insert(cy, new_vis);
-	// 			rope_len = 0;
-	// 		} else {
-	// 			self.visual[cy].offset = offset;
-	// 			self.visual[cy].len    = 20.min(rope_len);
-	// 			self.visual[cy].rope   = og_rope +1; // will be updated at the end
-    //
-	// 			rope_len -= self.visual[cy].len;
-	// 			offset += 20;
-	// 		}
-	// 		cy += 1;
-	// 	}
-	// 	// now its time to update all the 'rope' fields
-	// 	for i in cy .. self.visual.len() {
-	// 		self.visual[i].rope += 1;
-	// 	}
-	// }
-
     /// completely rebuilds self.visual.
     /// *can* deal with terminal copy/paste correctly
     fn build_visual_line(&mut self) {
@@ -355,28 +308,48 @@ impl Buffer {
             })
             .collect();
     }
+
+    /*
+    * stuff related to viewport
+    */
+    /// ensures buffer resizing is done correctly
+    pub fn resize(&mut self, width : usize, height : usize) {
+        self.viewport.width = width;
+        self.viewport.height = height;
+        // 
+        self.viewport_fix_offset();
+    }
+    
+    /// fixes offset related to undo/redo/resize operations.
+    /// 
+    /// rebuilds visual lines also, as this is a prerequisite.
+    fn viewport_fix_offset(&mut self) {
+        self.build_visual_line();
+        // check if offset is correct 
+        let (_, cy) = self.get_cursor_pos();
+        if cy < 0 {
+            self.viewport.offset -= (-cy) as usize;
+        } else if cy >= self.viewport.height as i32 {
+            self.viewport.offset += cy as usize; 
+        }
+    }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Default, PartialEq, Eq)]
 struct Edit {
     text      : ropey::Rope,
     cs        : usize,
     to_stash  : bool,
-    viewport   : ViewPort,
+    vp_off    : usize,
 }
 
 impl Edit {
-    
-    fn new(cs : usize, viewport : ViewPort) -> Self {
+    fn new(cs : usize, viewport_offset: usize) -> Self {
         Edit { 
             text: ropey::Rope::new(), 
             cs, to_stash : false ,
-            viewport,
+            vp_off : viewport_offset,
         }
-    }
-
-    fn default() -> Self {
-        Edit::new(0, ViewPort::default())
     }
 }
 
@@ -394,7 +367,7 @@ pub struct VisualLine {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ViewPort {
 	pub offset : usize,
-    width     : usize,
+    pub width  : usize,
     pub height : usize,
 }
 
