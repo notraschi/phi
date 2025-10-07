@@ -29,7 +29,7 @@ impl Buffer {
     pub fn new(w: usize, h: usize) -> Buffer {
         Buffer::open("new-file.md".to_owned(), 
             ropey::Rope::new(),
-            w, h
+            w -6, h
         )
     }
 
