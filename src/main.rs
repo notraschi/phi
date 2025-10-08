@@ -207,10 +207,10 @@ fn main() -> io::Result<()> {
         let buf = &ed.bufs[ed.active_buf];
 
         // at the beginning print the buffer
-        queue!(
-            stdout,
-            terminal::Clear(terminal::ClearType::All),
-        )?;
+        // queue!(
+        //     stdout,
+        //     terminal::Clear(terminal::ClearType::All),
+        // )?;
         // get visual lines in viewport
         let vp_start = buf.viewport.offset;
         let vp_end = buf.viewport.height + vp_start;
@@ -230,6 +230,8 @@ fn main() -> io::Result<()> {
 					),
 					off = buf.offset as usize -1
 				)),
+                MoveTo(vl.len as u16 + buf.offset -1, i as u16),
+                terminal::Clear(terminal::ClearType::UntilNewLine),
             )?;
         }
 
@@ -252,7 +254,6 @@ fn main() -> io::Result<()> {
                 stdout.queue(cursor::MoveTo(cx as u16 + buf.offset, cy as u16 /*- vp_start as u16*/))?;
             },
         }
-
 
         stdout.flush()?;
         
