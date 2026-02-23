@@ -15,6 +15,7 @@ use std::{collections::HashMap, io::{self, Write}, rc::Rc};
 mod buffer;
 mod selection;
 mod command;
+mod render;
 use command::*;
 use buffer::*;
 
@@ -186,9 +187,17 @@ impl Editor {
     */
     fn run(&mut self, mut terminal: DefaultTerminal) -> io::Result<()> {
         while self.alive {
-            terminal.draw(|frame| 
-                frame.render_widget(self.active_buf(), frame.area())
-            )?;
+            terminal.draw(|frame| {
+				let buf = self.active_buf();
+                frame.render_widget(
+					render::BufferWidget {
+						rope: &buf.lines,
+						visual: &buf.visual,
+						viewport: &buf.viewport
+					},
+					frame.area()
+				)
+            })?;
             self.handle_crossterm_events()?;
         }
         Ok(())

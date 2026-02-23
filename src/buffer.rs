@@ -1,5 +1,3 @@
-use ratatui::text::Line;
-
 /*
 * buffer struct - this stores the file info & content
 */
@@ -335,14 +333,6 @@ impl Buffer {
     }
 }
 
-impl ratatui::widgets::Widget for &Buffer {
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-    where
-        Self: Sized {
-        Line::raw("yo").render(area, buf);
-    }
-}
-
 #[derive(Default, PartialEq, Eq)]
 struct Edit {
     text      : ropey::Rope,
@@ -363,7 +353,7 @@ impl Edit {
 
 #[derive(Default, Clone, Copy, Debug)]
 pub struct VisualLine {
-	offset   : usize,
+	pub offset   : usize,
 	pub len  : usize,
 	pub rope : usize,
 }
