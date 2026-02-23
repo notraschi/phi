@@ -7,8 +7,9 @@
 
 
 use crossterm::{
-    cursor::{self, MoveTo}, event::{KeyCode, KeyEvent, KeyModifiers}, execute, queue, style::Print, terminal::{self, size}, QueueableCommand
+    event::{KeyCode, KeyEvent, KeyModifiers}, terminal::size
 };
+use ratatui::{DefaultTerminal, Frame};
 use std::{collections::HashMap, io::{self, Write}, rc::Rc};
 
 mod buffer;
@@ -43,7 +44,6 @@ impl Default for Editor {
         comds.insert(Edit.name(), Rc::new(Edit));
         comds.insert(Undo.name(), Rc::new(Undo));
         comds.insert(Redo.name(), Rc::new(Redo));
-        comds.insert(Test.name(), Rc::new(Test));
         comds.insert(SwitchBuffer.name(), Rc::new(SwitchBuffer));
 
         Self { bufs: Default::default(), 
@@ -72,8 +72,143 @@ impl Editor {
         let (w, h) = size().unwrap();
         (w as usize, h as usize -3)
     }
-}
 
+    fn active_buf(&self) -> &Buffer {
+        &self.bufs[self.active_buf]
+    }
+
+    fn active_buf_mut(&mut self) -> &mut Buffer {
+        &mut self.bufs[self.active_buf]
+    }
+    
+    /*
+    * handlers for various modes
+    */
+    #[allow(unused)]
+    fn handle_normal_mode(e : KeyCode) {
+        todo!();
+    }
+    
+    fn handle_insert_mode(&mut self, e : KeyEvent) {
+        
+        let buf = self.active_buf_mut();
+        match e {
+            // control pressed    
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                code: _, ..
+            } => {
+                {}
+            }
+            
+            // no modifier
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                code, ..
+            } => {
+                match code {
+                    // key handling
+                    KeyCode::Char(_) => buf.insert(code.as_char().unwrap()),
+                    KeyCode::Enter => buf.insert('\n'),
+                    KeyCode::Backspace => buf.delete(1),
+                    
+                    // enter command mode 
+                    KeyCode::Esc => self.mode = Mode::Command,
+                    KeyCode::Delete => buf.undo(),
+                    KeyCode::PageUp => buf.redo(),
+                    
+                    // arrow keys
+                    KeyCode::Up => buf.cursor_mv(Direction::Vert, -1, true),
+                    KeyCode::Down => buf.cursor_mv(Direction::Vert, 1, true),
+                    KeyCode::Right => buf.cursor_mv(Direction::Horiz, 1, true),
+                    KeyCode::Left => buf.cursor_mv(Direction::Horiz, -1, true),
+                    
+                    _ => {} 
+                }
+            }
+            _ => {}
+        }
+    }
+    
+    fn handle_command_mode(&mut self, e : KeyCode) {
+        match e {
+            KeyCode::Char(c) => self.prompt.insert(c),
+            KeyCode::Backspace => {
+                if self.prompt.cmd.is_empty() { self.mode = Mode::Insert; }
+                else { self.prompt.backspace(); }
+            },
+            KeyCode::Enter => { 
+                if let Some(args) = self.prompt.parse() {
+                    
+                    let cmd_name = args[0].as_str();
+                    if let Some(cmd) = self.comds.get(cmd_name).cloned() {
+                        match cmd.run(args, self) {
+                            Ok(()) => {
+                                self.prompt.cx = 0;
+                                self.mode = Mode::Insert;
+                            },
+                            Err(msg) => {
+                                self.prompt.msg(msg);
+                            }
+                        }
+                    } else {
+                        self.prompt.msg("not a command!".to_owned());
+                    }
+                }
+            },
+            
+            // quit prompt
+            KeyCode::Esc => self.mode = Mode::Insert,
+            KeyCode::Home => self.mode = Mode::Insert,
+            _ => {}
+        }
+    }
+
+    fn handle_crossterm_events(&mut self) -> io::Result<()>{
+        match crossterm::event::read()? {
+            crossterm::event::Event::Key(e) => match self.mode {
+                Mode::Command => self.handle_command_mode(e.code),
+                Mode::Insert => self.handle_insert_mode(e),
+                Mode::Normal => {},
+            }
+            crossterm::event::Event::Resize(w, h) => {
+                for buf in &mut self.bufs {
+                    buf.resize((w) as usize, h as usize -3);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    } 
+    
+    /*
+    * main
+    */
+    fn run(&mut self, mut terminal: DefaultTerminal) -> io::Result<()> {
+        while self.alive {
+            terminal.draw(|frame| 
+                frame.render_widget(self.active_buf(), frame.area())
+            )?;
+            self.handle_crossterm_events()?;
+        }
+        Ok(())
+    }
+}
+    
+fn main() -> io::Result<()> {
+    std::env::set_var("RUST_BACKTRACE", "1");
+    
+    // editor
+    let mut ed = Editor::default();
+    
+    // first buffer
+    ed.new_buf();
+    ed.alive = true;
+    
+    // run the application
+    ed.run(ratatui::init())
+}
+    
 /*
 * editor mode
 */
@@ -88,189 +223,4 @@ impl Default for Mode {
     fn default() -> Self {
         Mode::Insert
     }
-}
-
-/*
-* handlers for various modes
-*/
-#[allow(unused)]
-fn handle_normal_mode(e : KeyCode) {
-    todo!();
-}
-
-fn handle_insert_mode(ed : &mut Editor, e : KeyEvent) -> io::Result<()> {
-
-    let buf = &mut ed.bufs[ed.active_buf]; 
-    match e {
-        // control pressed    
-        KeyEvent {
-            modifiers: KeyModifiers::CONTROL,
-            code: _, ..
-        } => {
-            {}
-        }
-        
-        // no modifier
-        KeyEvent {
-            modifiers: KeyModifiers::NONE,
-            code, ..
-        } => {
-            match code {
-                // key handling
-                KeyCode::Char(_) => buf.insert(code.as_char().unwrap()),
-                KeyCode::Enter => buf.insert('\n'),
-                KeyCode::Backspace => buf.delete(1),
-                
-                // enter command mode 
-                KeyCode::Esc => ed.mode = Mode::Command,
-                KeyCode::Delete => buf.undo(),
-                KeyCode::PageUp => buf.redo(),
-                
-                // arrow keys
-                KeyCode::Up => buf.cursor_mv(Direction::Vert, -1, true),
-                KeyCode::Down => buf.cursor_mv(Direction::Vert, 1, true),
-                KeyCode::Right => buf.cursor_mv(Direction::Horiz, 1, true),
-                KeyCode::Left => buf.cursor_mv(Direction::Horiz, -1, true),
-                
-                _ => {} 
-            }
-        }
-        _ => {}
-    }
-
-    Ok(())
-}
-
-fn handle_command_mode(ed : &mut Editor, e : KeyCode) {
-    
-    match e {
-        KeyCode::Char(c) => ed.prompt.insert(c),
-        KeyCode::Backspace => {
-            if ed.prompt.cmd.is_empty() { ed.mode = Mode::Insert; }
-            else { ed.prompt.backspace(); }
-        },
-        KeyCode::Enter => { 
-            if let Some(args) = ed.prompt.parse() {
-
-                let cmd_name = args[0].as_str();
-                if let Some(cmd) = ed.comds.get(cmd_name).cloned() {
-
-                    match cmd.run(args, ed) {
-                        Ok(()) => {
-                            ed.prompt.cx = 0;
-                            ed.mode = Mode::Insert;
-                        },
-                        Err(msg) => {
-                            ed.prompt.msg(msg);
-                        }
-                    }
-
-                } else {
-                    ed.prompt.msg("not a command!".to_owned());
-                }
-            }
-        },
-
-        // quit prompt
-        KeyCode::Esc => ed.mode = Mode::Insert,
-        KeyCode::Home => ed.mode = Mode::Insert,
-        _ => {}
-    }
-}
-
-/*
-* main
-*/
-fn main() -> io::Result<()> {
-
-	std::env::set_var("RUST_BACKTRACE", "1");
-    // begin
-    let mut stdout = io::stdout();
-    terminal::enable_raw_mode()?;
-
-    execute!(
-        stdout,
-        terminal::EnterAlternateScreen,
-        terminal::Clear(terminal::ClearType::All)
-    )?;
-
-    // editor
-    let mut ed = Editor::default();
-
-    // first buffer
-    ed.new_buf();
-    ed.alive = true;
-
-    while ed.alive {
-
-        // grab active buffer
-        let buf = &ed.bufs[ed.active_buf];
-
-        // at the beginning print the buffer
-        queue!(
-            stdout,
-            terminal::Clear(terminal::ClearType::All),
-        )?;
-        // get visual lines in viewport
-        let vp_start = buf.viewport.offset;
-        let vp_end = buf.viewport.height + vp_start;
-
-        let vls = &buf.visual[vp_start .. vp_end.min(buf.visual.len())];
-
-        for (i, vl) in vls.iter().enumerate() {
-			
-			let start = buf.visual_to_rope(0, i);
-			queue!(
-				stdout,
-                MoveTo(0, i as u16),
-				Print(format!("{:<off$} {}", 
-					vl.rope,
-					buf.lines.slice(
-						start .. start + vl.len
-					),
-					off = buf.offset as usize -1
-				)),
-                MoveTo(vl.len as u16 + buf.offset, i as u16),
-                terminal::Clear(terminal::ClearType::UntilNewLine),
-            )?;
-        }
-
-        // now its the users turn
-        match ed.mode {
-            // tmp - mouse pos on command mode is stuck in the beginning
-            Mode::Command => {  
-                let (_, rows) = size()?;
-                let cx = ed.prompt.cx as u16 +1;
-                queue!(
-                    stdout,
-                    MoveTo(0, rows.saturating_sub(1)),
-                    Print(format!(":{}", ed.prompt.cmd)),
-                    MoveTo(cx, rows.saturating_sub(1))
-                )?;
-            },
-            // if mode isn't command, mouse pos if where it should be
-            _ => {
-                let (cx, cy) = buf.get_cursor_pos();
-                stdout.queue(cursor::MoveTo(cx as u16 + buf.offset, cy as u16 /*- vp_start as u16*/))?;
-            },
-        }
-
-        stdout.flush()?;
-        
-        // switch on modes
-        match crossterm::event::read()? {
-            crossterm::event::Event::Key(e) => match ed.mode {
-                Mode::Command => handle_command_mode(&mut ed, e.code),
-                Mode::Insert => handle_insert_mode(&mut ed, e)?,
-                Mode::Normal => {},
-            }
-            crossterm::event::Event::Resize(w, h) => {
-                for buf in &mut ed.bufs {
-                    buf.resize((w) as usize, h as usize -3);
-                }
-            }
-            _ => {}
-        }
-    }
-    Ok(())
 }

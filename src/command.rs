@@ -101,22 +101,25 @@ impl Command for Quit {
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
         if args.len() > 1 { return Err("too many args".to_owned()); }
 
-        convert_res(crossterm::execute!(
-            std::io::stdout(), 
-            crossterm::terminal::LeaveAlternateScreen
-        ))?;
-        convert_res(crossterm::terminal::disable_raw_mode())?;
+        ratatui::restore();
+        // convert_res(crossterm::execute!(
+        //     std::io::stdout(), 
+        //     crossterm::terminal::LeaveAlternateScreen
+        // ))?;
+        // convert_res(crossterm::terminal::disable_raw_mode())?;
         ed.alive = false;
         Ok(())
     }
 }
 
 /// loads an existing file into a new buffer and sets it as the active one.
+/// if called with no argument, creates a new buffer
 pub struct Edit;
 impl Command for Edit {
     fn name(&self) -> &'static str { "e" }
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
         if args.len() > 2 { return Err("too many args".to_owned()); }
+        if args.len() < 2 { return Err("no file was specified".to_owned()); }
         
         let reader = std::io::BufReader::new(
             convert_res(std::fs::File::open(args[1].to_owned()))?
@@ -132,12 +135,20 @@ impl Command for Edit {
     }
 }
 
-/// loads an existing file into a new buffer and sets it as the active one.
+/// opens an existing buffer and sets it as the active one.
 pub struct SwitchBuffer;
 impl Command for SwitchBuffer {
     fn name(&self) -> &'static str { "b" }
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
         if args.len() > 2 { return Err("too many args".to_owned()); }
+
+        if args.len() == 1 {
+            let (w, h) = ed.get_size();
+            ed.bufs.push(Buffer::new(w, h));
+            ed.active_buf = ed.bufs.len() -1; 
+            return Ok(());
+        }
+
         match args[1].parse::<usize>() {
             Err(_) => return Err("invalid argument".to_owned()),
             Ok(v)  => {
@@ -158,7 +169,7 @@ impl Command for Undo {
     fn name(&self) -> &'static str { "undo" }
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
         if args.len() > 1 { return Err("too many args".to_owned()); }
-        ed.bufs[ed.active_buf].undo();
+        ed.active_buf_mut().undo();
         Ok(())
     }
 }
@@ -169,18 +180,7 @@ impl Command for Redo {
     fn name(&self) -> &'static str { "redo" }
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
         if args.len() > 1 { return Err("too many args".to_owned()); }
-        ed.bufs[ed.active_buf].redo();
-        Ok(())
-    }
-}
-
-/// used for testing features
-pub struct Test;
-impl Command for Test {
-    fn name(&self) -> &'static str { "t" }
-    fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
-        let buf = &mut ed.bufs[ed.active_buf];
-        buf.resize(args[1].parse().unwrap(), args[2].parse().unwrap());
+        ed.active_buf_mut().redo();
         Ok(())
     }
 }

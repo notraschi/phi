@@ -1,3 +1,5 @@
+use ratatui::text::Line;
+
 /*
 * buffer struct - this stores the file info & content
 */
@@ -17,11 +19,6 @@ pub struct Buffer {
 	// visual stuff - trying this out
 	pub visual : Vec<VisualLine>,
     pub viewport : ViewPort,
-}
-
-pub enum Direction {
-    Vert,
-    Horiz
 }
 
 // #[allow(unused)]
@@ -338,6 +335,14 @@ impl Buffer {
     }
 }
 
+impl ratatui::widgets::Widget for &Buffer {
+    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
+    where
+        Self: Sized {
+        Line::raw("yo").render(area, buf);
+    }
+}
+
 #[derive(Default, PartialEq, Eq)]
 struct Edit {
     text      : ropey::Rope,
@@ -378,4 +383,9 @@ impl ViewPort {
     fn new(width : usize, height : usize) -> Self {
         ViewPort { offset: 0, width, height}
     }
+}
+
+pub enum Direction {
+    Vert,
+    Horiz
 }
