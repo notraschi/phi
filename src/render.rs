@@ -1,9 +1,11 @@
 use ratatui::{
+	Frame,
 	buffer::Buffer,
 	layout::Rect,
-	widgets::Widget
+	widgets::{Widget, Block, Paragraph, Clear}
 };
 use crate::buffer::{VisualLine, ViewPort};
+use crate::Editor;
 
 pub struct BufferWidget<'a> {
 	pub rope: &'a ropey::Rope,
@@ -34,13 +36,30 @@ impl<'a> Widget for BufferWidget<'a> {
 
 			let text = self.rope.slice(start..start + vl.len);
 			
-			buf.set_stringn(
+			buf.set_string(
 				area.x,
 				area.y + i as u16,
 				text.to_string(), // avoid maybe
-				area.width as usize,
 				ratatui::style::Style::default()
 			);
 		}
 	}
 }
+
+fn render_buffer(frame: &mut Frame, buf: &crate::buffer::Buffer, ed: &Editor) {
+	let outline = Block::bordered().title(
+		ed.active_buf.to_string() + ": " + &buf.filename
+	);
+	let outline_area = outline.inner(frame.area());
+
+	frame.render_widget(outline, frame.area());
+	frame.render_widget(
+		BufferWidget {
+			rope: &buf.lines,
+			visual: &buf.visual,
+			viewport: &buf.viewport
+		},
+		outline_area
+	);
+}
+

@@ -4,18 +4,19 @@
 * 
 * officially functioning!
 */
-
-
-use crossterm::{
-    event::{KeyCode, KeyEvent, KeyModifiers}, terminal::size
-};
-use ratatui::{DefaultTerminal, Frame};
-use std::{collections::HashMap, io::{self, Write}, rc::Rc};
-
 mod buffer;
 mod selection;
 mod command;
 mod render;
+
+use crossterm::{
+    event::{KeyCode, KeyEvent, KeyModifiers}, terminal::size
+};
+use ratatui::DefaultTerminal;
+use ratatui::widgets::{Block, Paragraph, Clear};
+use ratatui::prelude::Rect;
+use std::{collections::HashMap, io::self, rc::Rc};
+
 use command::*;
 use buffer::*;
 
@@ -30,6 +31,8 @@ struct Editor {
     // misc
     mode : Mode,
     alive : bool,
+	offset : usize,
+	padding : usize,
     // command stuff
     prompt : Prompt,
     comds  : HashMap<&'static str, Rc<dyn command::Command>>
@@ -51,6 +54,8 @@ impl Default for Editor {
             active_buf: Default::default(),
             mode: Default::default(), 
             alive: Default::default(), 
+			offset : Default::default(),
+			padding : 1,
             prompt: Default::default(),
             comds : comds,
         }
@@ -71,7 +76,7 @@ impl Editor {
     /// used to resize buffers nicely
     fn get_size(&self) -> (usize, usize){
         let (w, h) = size().unwrap();
-        (w as usize, h as usize -3)
+        (w as usize - self.offset - self.padding * 2, h as usize - self.padding * 2)
     }
 
     fn active_buf(&self) -> &Buffer {
@@ -174,7 +179,10 @@ impl Editor {
             }
             crossterm::event::Event::Resize(w, h) => {
                 for buf in &mut self.bufs {
-                    buf.resize((w) as usize, h as usize -3);
+                    buf.resize(
+						w as usize - self.offset - self.padding * 2,
+						h as usize - self.padding * 2
+					);
                 }
             }
             _ => {}
@@ -189,16 +197,51 @@ impl Editor {
         while self.alive {
             terminal.draw(|frame| {
 				let buf = self.active_buf();
+				let outline = Block::bordered().title(
+					self.active_buf.to_string() + ": " + &buf.filename
+				);
+				let outline_area = outline.inner(frame.area());
+
+				frame.render_widget(outline, frame.area());
                 frame.render_widget(
 					render::BufferWidget {
 						rope: &buf.lines,
 						visual: &buf.visual,
 						viewport: &buf.viewport
 					},
-					frame.area()
-				)
+					outline_area
+				);
+				// render the command propmpt if in command mode
+				// render the cursor
+				match self.mode {
+					Mode::Command => {
+						let prompt_area = Rect {
+							x: frame.area().x,
+							y: frame.area().height.saturating_sub(3),
+							width: frame.area().width,
+							height: self.padding as u16 * 2 + 1
+						};
+						let prompt_outline = Block::bordered().title(":");
+						let prompt = Paragraph::new(self.prompt.cmd.as_str())
+							.block(prompt_outline);
+						frame.render_widget(Clear, prompt_area);
+						frame.render_widget(prompt, prompt_area);
+						frame.set_cursor_position((
+							self.prompt.cx as u16 + self.padding as u16 + self.offset as u16,
+							prompt_area.y + self.padding as u16
+						));
+					},
+					Mode::Insert  => {
+						let (cx, cy) = buf.get_cursor_pos();
+						frame.set_cursor_position((
+							cx as u16 + self.padding as u16 + self.offset as u16,
+							cy as u16 + self.padding as u16
+						));
+					},
+					Mode::Normal => {}
+				}
             })?;
-            self.handle_crossterm_events()?;
+			self.handle_crossterm_events()?;
         }
         Ok(())
     }
