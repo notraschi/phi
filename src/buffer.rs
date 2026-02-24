@@ -18,8 +18,9 @@ pub struct Buffer {
     pub viewport : ViewPort,
 }
 
-// #[allow(unused)]
 impl Buffer {
+
+	/// creates a new empty buffer with a default name
     pub fn new(w: usize, h: usize) -> Buffer {
         Buffer::open("new-file.md".to_owned(), 
             ropey::Rope::new(),
@@ -28,6 +29,7 @@ impl Buffer {
         )
     }
 
+	/// opens a new buffer reading a specified file
     pub fn open(filename : String, ctx : ropey::Rope, w: usize, h: usize) -> Buffer {
         let mut  buf = Buffer { 
 			lines: ctx, 
@@ -45,6 +47,7 @@ impl Buffer {
         buf
     }
 
+	/// inserts a single char in the buffer
     pub fn insert(&mut self, char : char) {
         self.modified = true;
         // inserting
@@ -66,6 +69,7 @@ impl Buffer {
         self.update_edit(false);
     }
 
+	/// deletes amt chars
     pub fn delete(&mut self, amt: usize) {
 		self.modified = true;
         // bounds check
@@ -172,9 +176,9 @@ impl Buffer {
         (cx as i32, cy as i32 - self.viewport.offset as i32)
     }
 
-	/*
-	*	section related to undo/redo stuff
-	*/
+	/// undoes an Edit.
+	/// fixes viewport and visual lines.
+	/// cursor is put back in the previews place.
     pub fn undo(&mut self) {
 
         self.curr_edit -= 1;
@@ -189,11 +193,12 @@ impl Buffer {
             self.history.insert(0, Edit::default());    
             self.curr_edit += 1;
         }
-        // // rebuild visual lines
-        // self.build_visual_line();
-        self.viewport_fix_offset();
+
+		self.viewport_fix_offset();
     }
 
+	/// redoes an edit.
+	/// possible only if undo command was just executed.
     pub fn redo(&mut self) {
         // do nothing if there is no future
         if self.curr_edit == self.history.len() -1 { return; }
@@ -205,11 +210,12 @@ impl Buffer {
 		self.modified = edit.modified;
         self.viewport.offset = edit.vp_off;
         edit.to_stash = true;
-        // rebuild visual lines
-        // self.build_visual_line();
+
         self.viewport_fix_offset();
     }
 
+	/// creates a new curr edit.
+	/// updates history.
     fn new_edit(&mut self) {
         // dont leave blank edits!
         if self.history.len() > 1 && 
@@ -224,6 +230,7 @@ impl Buffer {
         self.history.push(Edit::new(self.cs, self.viewport.offset, self.modified));
     }
 
+	/// updates the curr edit
     fn update_edit(&mut self, to_stash : bool) {
         let edit = &mut self.history[self.curr_edit];
         edit.text = self.lines.clone();
@@ -232,9 +239,6 @@ impl Buffer {
         edit.vp_off = self.viewport.offset; 
     }
 
-	/*
-	* section related to handling visual lines
-	*/
     /// converts between index in the Rope to indexes (col, row).
     /// panics if indexes cant be found.
     /// 
@@ -316,9 +320,6 @@ impl Buffer {
             .collect();
     }
 
-    /*
-    * stuff related to viewport
-    */
     /// ensures buffer resizing is done correctly
     pub fn resize(&mut self, width : usize, height : usize) {
         self.viewport.width = width;
