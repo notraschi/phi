@@ -14,7 +14,7 @@ pub struct BufferWidget<'a> {
 }
 
 impl<'a> BufferWidget<'a> {
-	pub fn visual_to_rope(&self, cx : usize, cy : usize) -> usize {
+	fn visual_to_rope(&self, cx : usize, cy : usize) -> usize {
 		let vl = self.visual[cy + self.viewport.offset];
 		
 		// total offset from the beginning of the rope line
@@ -46,9 +46,9 @@ impl<'a> Widget for BufferWidget<'a> {
 	}
 }
 
-fn render_buffer(frame: &mut Frame, buf: &crate::buffer::Buffer, ed: &Editor) {
+pub fn render_buffer(frame: &mut Frame, buf: &crate::buffer::Buffer, ed: &Editor) {
 	let outline = Block::bordered().title(
-		ed.active_buf.to_string() + ": " + &buf.filename
+		"[".to_owned() + &ed.active_buf.to_string() + ": " + &buf.filename + "]"
 	);
 	let outline_area = outline.inner(frame.area());
 
@@ -61,5 +61,24 @@ fn render_buffer(frame: &mut Frame, buf: &crate::buffer::Buffer, ed: &Editor) {
 		},
 		outline_area
 	);
+}
+
+pub fn render_command_prompt(frame: &mut Frame, ed: &Editor) {
+	let prompt_area = Rect {
+		x: frame.area().x,
+		y: frame.area().height.saturating_sub(3),
+		width: frame.area().width,
+		height: ed.padding as u16 * 2 + 1
+	};
+	let prompt_outline = Block::bordered().title(":");
+	let prompt = Paragraph::new(ed.prompt.cmd.as_str())
+		.block(prompt_outline);
+	frame.render_widget(Clear, prompt_area);
+	frame.render_widget(prompt, prompt_area);
+	// sets cursor position
+	frame.set_cursor_position((
+		ed.prompt.cx as u16 + ed.padding as u16 + ed.offset as u16,
+		prompt_area.y + ed.padding as u16
+	));
 }
 
