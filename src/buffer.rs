@@ -7,14 +7,13 @@ pub struct Buffer {
     // pub modified : bool,
     // pub saved : bool,
     // each buffer stores its own cursor position
-    pub offset : u16,
     cs : usize,
-    // used for movement - might move to its own Cursor struct
+    // used for movement
     cached_cx : usize,
     // undo stuff
     curr_edit : usize,
     history : Vec<Edit>,
-	// visual stuff - trying this out
+	// visual stuff 
 	pub visual : Vec<VisualLine>,
     pub viewport : ViewPort,
 }
@@ -24,7 +23,8 @@ impl Buffer {
     pub fn new(w: usize, h: usize) -> Buffer {
         Buffer::open("new-file.md".to_owned(), 
             ropey::Rope::new(),
-            w -6, h
+            w,
+			h
         )
     }
 
@@ -33,7 +33,7 @@ impl Buffer {
 			lines: ctx, 
 			filename,
 			// modified: false, saved: false, new : true,
-			offset: 5, cs: 0,
+			cs: 0,
 			cached_cx : 0,
 			curr_edit : 1,
 			history : vec![Edit::default(), Edit::default()],
@@ -312,7 +312,7 @@ impl Buffer {
     */
     /// ensures buffer resizing is done correctly
     pub fn resize(&mut self, width : usize, height : usize) {
-        self.viewport.width = width - self.offset as usize -1;
+        self.viewport.width = width;
         self.viewport.height = height;
         // 
         self.viewport_fix_offset();
