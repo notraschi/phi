@@ -13,7 +13,7 @@ use crossterm::{
     event::{KeyCode, KeyEvent, KeyModifiers}, terminal::size
 };
 use ratatui::DefaultTerminal;
-use std::{collections::HashMap, io::self, rc::Rc};
+use std::{collections::HashMap, io, rc::Rc};
 
 use command::*;
 use buffer::*;
@@ -29,8 +29,8 @@ struct Editor {
     // misc
     mode : Mode,
     alive : bool,
-	offset : usize,
-	padding : usize,
+	offset : u16,
+	padding : u16,
     // command stuff
     prompt : Prompt,
     comds  : HashMap<&'static str, Rc<dyn command::Command>>
@@ -52,7 +52,7 @@ impl Default for Editor {
             active_buf: Default::default(),
             mode: Default::default(), 
             alive: Default::default(), 
-			offset : Default::default(),
+			offset : 5,
 			padding : 1,
             prompt: Default::default(),
             comds : comds,
@@ -74,7 +74,7 @@ impl Editor {
     /// used to resize buffers nicely
     fn get_size(&self) -> (usize, usize){
         let (w, h) = size().unwrap();
-        (w as usize - self.offset - self.padding * 2, h as usize - self.padding * 2)
+        ((w - self.offset - self.padding * 2) as usize, (h - self.padding * 2) as usize)
     }
 
     fn active_buf(&self) -> &Buffer {
@@ -178,8 +178,8 @@ impl Editor {
             crossterm::event::Event::Resize(w, h) => {
                 for buf in &mut self.bufs {
                     buf.resize(
-						w as usize - self.offset - self.padding * 2,
-						h as usize - self.padding * 2
+						(w - self.offset - self.padding * 2) as usize,
+						(h - self.padding * 2) as usize
 					);
                 }
             }
