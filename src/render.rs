@@ -48,7 +48,12 @@ impl<'a> Widget for BufferWidget<'a> {
 
 pub fn render_buffer(frame: &mut Frame, buf: &crate::buffer::Buffer, ed: &Editor) {
 	let outline = Block::bordered().title(
-		"[".to_owned() + &ed.active_buf.to_string() + ": " + &buf.filename + "]"
+		"[ ".to_owned() + &ed.active_buf.to_string() + ": " + &buf.filename
+		+ match buf.modified {
+			true => "*",
+			false => ""
+		}
+		+ " ]"
 	);
 	let outline_area = outline.inner(frame.area());
 

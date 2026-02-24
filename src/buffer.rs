@@ -4,7 +4,7 @@
 pub struct Buffer {
     pub lines : ropey::Rope,
     pub filename : String,
-    // pub modified : bool,
+    pub modified : bool,
     // pub saved : bool,
     // each buffer stores its own cursor position
     cs : usize,
@@ -32,7 +32,7 @@ impl Buffer {
         let mut  buf = Buffer { 
 			lines: ctx, 
 			filename,
-			// modified: false, saved: false, new : true,
+			modified: false,
 			cs: 0,
 			cached_cx : 0,
 			curr_edit : 1,
@@ -46,7 +46,7 @@ impl Buffer {
     }
 
     pub fn insert(&mut self, char : char) {
-        
+        self.modified = true;
         // inserting
         self.lines.insert_char(self.cs, char);
 		// visual lines
@@ -67,7 +67,7 @@ impl Buffer {
     }
 
     pub fn delete(&mut self, amt: usize) {
-
+		self.modified = true;
         // bounds check
         if self.cs < amt { return; }
 
@@ -90,6 +90,13 @@ impl Buffer {
         //  append to the curr edit
         self.update_edit(true);  
     }
+
+	/// fixes modified status and history
+	pub fn save(&mut self) {
+		self.modified = false;
+		self.history[self.curr_edit].to_stash = true;
+	}
+
 
     /// **NOTE**: aside from undo actions (and the tiny if on delete), 
     /// only this fn updates the viewport
@@ -174,6 +181,7 @@ impl Buffer {
         let edit = &self.history[self.curr_edit];
         self.lines = edit.text.clone();
         self.cs = edit.cs;
+		self.modified = edit.modified;
         self.viewport.offset = edit.vp_off;
         
         // base edit stuff
@@ -194,6 +202,7 @@ impl Buffer {
         let edit = &mut self.history[self.curr_edit];
         self.lines = edit.text.clone();
         self.cs    = edit.cs;
+		self.modified = edit.modified;
         self.viewport.offset = edit.vp_off;
         edit.to_stash = true;
         // rebuild visual lines
@@ -212,7 +221,7 @@ impl Buffer {
         //
         self.curr_edit += 1;
         self.history.truncate(self.curr_edit);
-        self.history.push(Edit::new(self.cs, self.viewport.offset));
+        self.history.push(Edit::new(self.cs, self.viewport.offset, self.modified));
     }
 
     fn update_edit(&mut self, to_stash : bool) {
@@ -339,14 +348,16 @@ struct Edit {
     cs        : usize,
     to_stash  : bool,
     vp_off    : usize,
+	modified  : bool,
 }
 
 impl Edit {
-    fn new(cs : usize, viewport_offset: usize) -> Self {
+    fn new(cs : usize, viewport_offset: usize, modified: bool) -> Self {
         Edit { 
             text: ropey::Rope::new(), 
             cs, to_stash : false ,
             vp_off : viewport_offset,
+			modified
         }
     }
 }

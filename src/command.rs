@@ -82,7 +82,8 @@ impl Command for Write {
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
         if args.len() > 1 { return Err("too many args".to_owned()); }
 
-        let buf = &ed.bufs[ed.active_buf];
+        let buf = ed.active_buf_mut();
+		buf.save();
         let mut wr = std::io::BufWriter::new(
             convert_res(std::fs::File::create(&buf.filename))
         ?);
