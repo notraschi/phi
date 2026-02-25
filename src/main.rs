@@ -8,6 +8,7 @@ mod buffer;
 mod selection;
 mod command;
 mod render;
+mod history;
 
 use crossterm::{
     event::{KeyCode, KeyEvent, KeyModifiers}, terminal::size

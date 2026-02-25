@@ -1,18 +1,17 @@
 /*
 * buffer struct - this stores the file info & content
 */
+use crate::history::History;
+
 pub struct Buffer {
-    pub lines : ropey::Rope,
-    pub filename : String,
-    pub modified : bool,
+    pub lines: ropey::Rope,
+    pub filename: String,
     // pub saved : bool,
     // each buffer stores its own cursor position
-    cs : usize,
-    // used for movement
-    cached_cx : usize,
+    cs: usize,
+    cached_cx: usize,
     // undo stuff
-    curr_edit : usize,
-    history : Vec<Edit>,
+    history: History,
 	// visual stuff 
 	pub visual : Vec<VisualLine>,
     pub viewport : ViewPort,
@@ -34,11 +33,9 @@ impl Buffer {
         let mut  buf = Buffer { 
 			lines: ctx, 
 			filename,
-			modified: false,
 			cs: 0,
 			cached_cx : 0,
-			curr_edit : 1,
-			history : vec![Edit::default(), Edit::default()],
+			history: History::default(),
 			visual : vec![VisualLine::default()],
             viewport : ViewPort::new(w, h),
         };
@@ -49,7 +46,7 @@ impl Buffer {
 
 	/// inserts a single char in the buffer
     pub fn insert(&mut self, char : char) {
-        self.modified = true;
+        self.history.update(&char, &self.lines, self.cs);
         // inserting
         self.lines.insert_char(self.cs, char);
 		// visual lines
@@ -57,48 +54,33 @@ impl Buffer {
         // 
         // self.fix_viewport(true);
         self.cursor_mv(Direction::Horiz, 1, false);
-		// doing this when visual lines are up to date
-		// self.cached_cx = self.get_cursor_pos().0 as usize;        
-        
-        // stash edit + new edit if char is space or a newline 
-        // ..or i was prev deleting chars
-        if char == ' ' || char == '\n' || self.history[self.curr_edit].to_stash { 
-            self.new_edit(); 
-        }
-        // append to the curr edit
-        self.update_edit(false);
     }
 
 	/// deletes amt chars
     pub fn delete(&mut self, amt: usize) {
-		self.modified = true;
         // bounds check
         if self.cs < amt { return; }
-
         // clever trick to simplify deleting chars: mv cursor first
         self.cursor_mv(Direction::Horiz, -(amt as i32), false);
         //
         self.lines.remove(self.cs .. self.cs + amt);
-        
 		// visual line stuff
         self.build_visual_line();
-
         // fix offset on a corner case
         if self.viewport.offset == self.visual.len() {
             self.viewport.offset -= 1;
         }
-        // stash edit 
-        if !self.history[self.curr_edit].to_stash {
-            self.new_edit();
-        }
-        //  append to the curr edit
-        self.update_edit(true);  
+        //
+        self.history.update(
+            &|| true,
+            &self.lines,
+            self.cs
+        ); 
     }
 
 	/// fixes modified status and history
 	pub fn save(&mut self) {
-		self.modified = false;
-		self.history[self.curr_edit].to_stash = true;
+		self.history.save();
 	}
 
 
@@ -106,9 +88,10 @@ impl Buffer {
     /// only this fn updates the viewport
     pub fn cursor_mv(&mut self, dir: Direction, amt: i32, new_edit : bool) {
 
-        if self.history[self.curr_edit].text.len_chars() > 0 && new_edit{
-            self.new_edit();
-        }
+        // if self.history[self.curr_edit].text.len_chars() > 0 && new_edit{
+        //     self.new_edit();
+        // }
+        self.history.update(&|| new_edit, &self.lines, self.cs);
         match dir {
             // has to cache the max cx
             Direction::Vert => {
@@ -180,19 +163,12 @@ impl Buffer {
 	/// fixes viewport and visual lines.
 	/// cursor is put back in the previews place.
     pub fn undo(&mut self) {
-
-        self.curr_edit -= 1;
-        let edit = &self.history[self.curr_edit];
+        self.history.stash(&self.lines, self.cs);
+        //
+        let edit = self.history.undo();
         self.lines = edit.text.clone();
         self.cs = edit.cs;
-		self.modified = edit.modified;
-        self.viewport.offset = edit.vp_off;
-        
-        // base edit stuff
-        if self.curr_edit == 0 {
-            self.history.insert(0, Edit::default());    
-            self.curr_edit += 1;
-        }
+        // self.viewport.offset = edit.vp_off;
 
 		self.viewport_fix_offset();
     }
@@ -200,43 +176,13 @@ impl Buffer {
 	/// redoes an edit.
 	/// possible only if undo command was just executed.
     pub fn redo(&mut self) {
-        // do nothing if there is no future
-        if self.curr_edit == self.history.len() -1 { return; }
-        //
-        self.curr_edit += 1;
-        let edit = &mut self.history[self.curr_edit];
-        self.lines = edit.text.clone();
-        self.cs    = edit.cs;
-		self.modified = edit.modified;
-        self.viewport.offset = edit.vp_off;
-        edit.to_stash = true;
+        //self.history.stash(&self.lines, self.cs);
+        if let Some(edit) = self.history.redo() {
+            self.lines = edit.text.clone();
+            self.cs = edit.cs;
 
-        self.viewport_fix_offset();
-    }
-
-	/// creates a new curr edit.
-	/// updates history.
-    fn new_edit(&mut self) {
-        // dont leave blank edits!
-        if self.history.len() > 1 && 
-            self.history[self.curr_edit].text.len_chars() == 0 
-        {
-            return;
+            self.viewport_fix_offset();
         }
-        self.history[self.curr_edit].to_stash = false;
-        //
-        self.curr_edit += 1;
-        self.history.truncate(self.curr_edit);
-        self.history.push(Edit::new(self.cs, self.viewport.offset, self.modified));
-    }
-
-	/// updates the curr edit
-    fn update_edit(&mut self, to_stash : bool) {
-        let edit = &mut self.history[self.curr_edit];
-        edit.text = self.lines.clone();
-        edit.cs   = self.cs;
-        edit.to_stash = to_stash; 
-        edit.vp_off = self.viewport.offset; 
     }
 
     /// converts between index in the Rope to indexes (col, row).
@@ -343,26 +289,6 @@ impl Buffer {
     }
 }
 
-#[derive(Default, PartialEq, Eq)]
-struct Edit {
-    text      : ropey::Rope,
-    cs        : usize,
-    to_stash  : bool,
-    vp_off    : usize,
-	modified  : bool,
-}
-
-impl Edit {
-    fn new(cs : usize, viewport_offset: usize, modified: bool) -> Self {
-        Edit { 
-            text: ropey::Rope::new(), 
-            cs, to_stash : false ,
-            vp_off : viewport_offset,
-			modified
-        }
-    }
-}
-
 #[derive(Default, Clone, Copy, Debug)]
 pub struct VisualLine {
 	pub offset   : usize,
@@ -382,7 +308,7 @@ pub struct ViewPort {
 }
 
 impl ViewPort {
-    fn new(width : usize, height : usize) -> Self {
+    fn new(width: usize, height: usize) -> Self {
         ViewPort { offset: 0, width, height}
     }
 }
@@ -390,4 +316,32 @@ impl ViewPort {
 pub enum Direction {
     Vert,
     Horiz
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // #[test]
+    // fn modified_indicator() {
+    //     let mut buf = Buffer::new(20,20);
+    //     assert!(!buf.history.is_dirty());
+    //     buf.insert('c');
+    //     assert!(buf.history.is_dirty());
+    // }
+
+    #[test]
+    fn undo() {
+        let mut buf = Buffer::new(20, 20);
+        buf.undo();
+        assert_eq!(1, buf.history.timeline.len(), "no new item in timeline (no change)");
+        buf.insert('c');
+        assert_eq!(1, buf.history.timeline.len(), "no stash, normal letter");
+        buf.insert(' ');
+        assert_eq!(2, buf.history.timeline.len(), "stash after a space");
+        buf.insert('c');
+        buf.undo();
+        assert_eq!("c", buf.lines.to_string());
+        buf.redo();
+    }
 }
