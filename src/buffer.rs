@@ -1,7 +1,7 @@
 /*
 * buffer struct - this stores the file info & content
 */
-use crate::history::{self, History};
+use crate::history::History;
 
 pub struct Buffer {
     pub lines: ropey::Rope,
