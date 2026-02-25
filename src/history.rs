@@ -7,17 +7,14 @@ pub struct History {
 }
 
 impl History {
-    /// s
-    pub fn update<E>(&mut self, ea: &E, ctx: &ropey::Rope, cs: usize)
-    where
-        E: EditAction
-    {
+    /// updates the timeline
+    pub fn update<E: EditAction>(&mut self, ea: &E, ctx: &ropey::Rope, cs: usize) {
         self.dirty = true;
         if ea.should_stash() { self.stash(ctx, cs); }
         self.timeline.truncate(self.curr +1);
     }
 
-    /// g
+    /// stashe a new edit, if meaningfull
     pub fn stash(&mut self, ctx: &ropey::Rope, cs: usize){
         if ctx != &self.timeline[self.curr].text {
             // trying this idea
@@ -42,10 +39,10 @@ impl History {
         Some(&self.timeline[self.curr])
     }
 
-    // /// returns whether this history is at a saved spot or nah
-    // pub fn is_dirty(&self) -> bool {
-    //     self.curr != self.saved //|| self.next.is_some()
-    // }
+    /// returns whether this history is at a saved spot or nah
+    pub fn is_dirty(&self) -> bool {
+        self.curr != self.saved || self.dirty
+    }
 
     /// registers a save in the history
     pub fn save(&mut self) {
@@ -87,14 +84,9 @@ where
 pub struct Edit {
     pub text      : ropey::Rope,
     pub cs        : usize,
-    // pub vp_off    : usize,
 }
 
 impl Edit {
-    // fn new(cs: usize) -> Self {
-    //     Self::from(ropey::Rope::new(), cs)
-    // }
-    
     fn from(text: ropey::Rope, cs: usize) -> Self {
         Edit { 
             text,

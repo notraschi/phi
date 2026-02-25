@@ -1,7 +1,7 @@
 /*
 * buffer struct - this stores the file info & content
 */
-use crate::history::History;
+use crate::history::{self, History};
 
 pub struct Buffer {
     pub lines: ropey::Rope,
@@ -82,7 +82,6 @@ impl Buffer {
 	pub fn save(&mut self) {
 		self.history.save();
 	}
-
 
     /// **NOTE**: aside from undo actions (and the tiny if on delete), 
     /// only this fn updates the viewport
@@ -286,6 +285,10 @@ impl Buffer {
         } else if cy >= self.viewport.height as i32 {
             self.viewport.offset += cy as usize; 
         }
+    }
+
+    pub fn is_modified(&self) -> bool {
+        self.history.is_dirty()
     }
 }
 
