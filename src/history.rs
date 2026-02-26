@@ -67,7 +67,7 @@ pub trait EditAction {
 
 impl EditAction for char {
     fn should_stash(&self) -> bool {
-        *self == ' ' || *self == '\n'
+        self.is_whitespace()
     }
 }
 

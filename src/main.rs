@@ -75,7 +75,7 @@ impl Editor {
     /// used to resize buffers nicely
     fn get_size(&self) -> (usize, usize){
         let (w, h) = size().unwrap();
-        ((w - self.offset - self.padding * 2) as usize, (h - self.padding * 2) as usize)
+        ((w - self.offset - self.padding * 2 -1) as usize, (h - self.padding * 2) as usize)
     }
 
     fn active_buf(&self) -> &Buffer {
@@ -101,9 +101,13 @@ impl Editor {
             // control pressed    
             KeyEvent {
                 modifiers: KeyModifiers::CONTROL,
-                code: _, ..
+                code, ..
             } => {
-                {}
+                match code {
+					KeyCode::Left => buf.cursor_mv(Move::Word(-1), true),
+					KeyCode::Right => buf.cursor_mv(Move::Word(1), true),
+					_ => {}
+				}
             }
             
             // no modifier

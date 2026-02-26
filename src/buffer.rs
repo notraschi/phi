@@ -52,7 +52,6 @@ impl Buffer {
         // self.build_visual_line();
         self.update_visual_line(Some(char));
         // 
-        // self.fix_viewport(true);
         self.cursor_mv(Move::Exact(Direction::Horiz, 1), false);
     }
 
@@ -86,12 +85,21 @@ impl Buffer {
         self.history.update(&|| new_edit, &self.lines, self.cs);
 		match mv {
 			Move::Exact(dir, amt) => self.cursor_mv_exact(dir, amt),
-			Move::Word(amt) => cursor_mv_word(amt)
+			Move::Word(amt) => self.cursor_mv_word(amt)
 		}
 	}
 
 	/// this moves the cursor an amt amount of words
-	fn cursor_mv_word(&mut self, amt: i32) {
+	fn cursor_mv_word(&mut self, mut amt: i32) {
+		let inc = amt.signum();
+		while amt != 0
+			&& (self.cs > 0 && inc == -1 || self.cs < self.lines.len_chars() && inc == 1) {
+			self.cs = (self.cs as i32 + inc) as usize; 
+			if self.cs == self.lines.len_chars() || self.lines.char(self.cs).is_whitespace() {
+				amt -= inc;
+			}
+		}
+		self.viewport_fix_offset();
 	}
 
 	/// this is used to move the cursor an exact amt of spaces.
@@ -171,12 +179,12 @@ impl Buffer {
 	/// cursor is put back in the previews place.
     pub fn undo(&mut self) {
         self.history.stash(&self.lines, self.cs);
-        //
+
         let edit = self.history.undo();
         self.lines = edit.text.clone();
         self.cs = edit.cs;
-        // self.viewport.offset = edit.vp_off;
 
+        self.build_visual_line();
 		self.viewport_fix_offset();
     }
 
@@ -188,6 +196,7 @@ impl Buffer {
             self.lines = edit.text.clone();
             self.cs = edit.cs;
 
+			self.build_visual_line();
             self.viewport_fix_offset();
         }
     }
@@ -285,6 +294,7 @@ impl Buffer {
         self.viewport.width = width;
         self.viewport.height = height;
         // 
+		self.build_visual_line();
         self.viewport_fix_offset();
     }
     
@@ -292,7 +302,6 @@ impl Buffer {
     /// 
     /// rebuilds visual lines also, as this is a prerequisite.
     fn viewport_fix_offset(&mut self) {
-        self.build_visual_line();
         // check if offset is correct 
         let (_, cy) = self.get_cursor_pos();
         if cy < 0 {
