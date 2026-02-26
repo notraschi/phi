@@ -53,7 +53,7 @@ impl Buffer {
         self.update_visual_line(Some(char));
         // 
         // self.fix_viewport(true);
-        self.cursor_mv(Direction::Horiz, 1, false);
+        self.cursor_mv(Move::Exact(Direction::Horiz, 1), false);
     }
 
 	/// deletes amt chars
@@ -62,7 +62,7 @@ impl Buffer {
         if self.cs < amt { return; }
 
         // clever trick to simplify deleting chars: mv cursor first
-        self.cursor_mv(Direction::Horiz, -(amt as i32), false);
+        self.cursor_mv(Move::Exact(Direction::Horiz, -(amt as i32)), false);
         //
         self.lines.remove(self.cs .. self.cs + amt);
 		// visual line stuff
@@ -81,14 +81,24 @@ impl Buffer {
 		self.history.save();
 	}
 
+	/// entry point to move the cursor
+	pub fn cursor_mv(&mut self, mv: Move, new_edit: bool) {
+        self.history.update(&|| new_edit, &self.lines, self.cs);
+		match mv {
+			Move::Exact(dir, amt) => self.cursor_mv_exact(dir, amt),
+			Move::Word(amt) => cursor_mv_word(amt)
+		}
+	}
+
+	/// this moves the cursor an amt amount of words
+	fn cursor_mv_word(&mut self, amt: i32) {
+	}
+
+	/// this is used to move the cursor an exact amt of spaces.
     /// **NOTE**: aside from undo actions (and the tiny if on delete), 
     /// only this fn updates the viewport
-    pub fn cursor_mv(&mut self, dir: Direction, amt: i32, new_edit : bool) {
+    fn cursor_mv_exact(&mut self, dir: Direction, amt: i32) {
 
-        // if self.history[self.curr_edit].text.len_chars() > 0 && new_edit{
-        //     self.new_edit();
-        // }
-        self.history.update(&|| new_edit, &self.lines, self.cs);
         match dir {
             // has to cache the max cx
             Direction::Vert => {
@@ -131,11 +141,11 @@ impl Buffer {
                 // fix viewport
                 let (cx, cy) = self.get_cursor_pos();
                 if cy == 0 && cx + amt < 0 && self.viewport.offset > 0 {
-                    self.viewport.offset -= 1;
+                    self.viewport.offset -= 1.max(amt.wrapping_abs() as usize / self.viewport.width);
                 } else if cy == self.viewport.height as i32 -1 && 
                     cx + amt > self.visual[cy as usize + self.viewport.offset].len as i32 -1
                 {
-                    self.viewport.offset += 1;
+                    self.viewport.offset += 1.max(amt.wrapping_abs() as usize / self.viewport.width);
                 }
 
                 self.cs = (amt + self.cs as i32) as usize;
@@ -324,6 +334,11 @@ impl ViewPort {
 pub enum Direction {
     Vert,
     Horiz
+}
+
+pub enum Move {
+	Exact(Direction, i32),
+	Word(i32)
 }
 
 #[cfg(test)]

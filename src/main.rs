@@ -123,10 +123,10 @@ impl Editor {
                     KeyCode::PageUp => buf.redo(),
                     
                     // arrow keys
-                    KeyCode::Up => buf.cursor_mv(Direction::Vert, -1, true),
-                    KeyCode::Down => buf.cursor_mv(Direction::Vert, 1, true),
-                    KeyCode::Right => buf.cursor_mv(Direction::Horiz, 1, true),
-                    KeyCode::Left => buf.cursor_mv(Direction::Horiz, -1, true),
+                    KeyCode::Up => buf.cursor_mv(Move::Exact(Direction::Vert, -1), true),
+                    KeyCode::Down => buf.cursor_mv(Move::Exact(Direction::Vert, 1), true),
+                    KeyCode::Right => buf.cursor_mv(Move::Exact(Direction::Horiz, 1), true),
+                    KeyCode::Left => buf.cursor_mv(Move::Exact(Direction::Horiz, -1), true),
                     
                     _ => {} 
                 }
