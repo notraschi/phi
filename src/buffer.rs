@@ -6,7 +6,6 @@ use crate::history::History;
 pub struct Buffer {
     pub lines: ropey::Rope,
     pub filename: String,
-    // pub saved : bool,
     // each buffer stores its own cursor position
     cs: usize,
     cached_cx: usize,
@@ -50,7 +49,8 @@ impl Buffer {
         // inserting
         self.lines.insert_char(self.cs, char);
 		// visual lines
-        self.build_visual_line();
+        // self.build_visual_line();
+        self.update_visual_line(Some(char));
         // 
         // self.fix_viewport(true);
         self.cursor_mv(Direction::Horiz, 1, false);
@@ -60,22 +60,20 @@ impl Buffer {
     pub fn delete(&mut self, amt: usize) {
         // bounds check
         if self.cs < amt { return; }
+
         // clever trick to simplify deleting chars: mv cursor first
         self.cursor_mv(Direction::Horiz, -(amt as i32), false);
         //
         self.lines.remove(self.cs .. self.cs + amt);
 		// visual line stuff
-        self.build_visual_line();
+        if amt == 1 { self.update_visual_line(Option::None); }
+        else { self.build_visual_line(); }
         // fix offset on a corner case
         if self.viewport.offset == self.visual.len() {
             self.viewport.offset -= 1;
         }
         //
-        self.history.update(
-            &|| true,
-            &self.lines,
-            self.cs
-        ); 
+        self.history.update(&|| true, &self.lines, self.cs); 
     }
 
 	/// fixes modified status and history
@@ -197,7 +195,7 @@ impl Buffer {
             .position(|vl| vl.rope == rope) {
                 Some(i) => i + rope,
                 None => panic!("was looking for rope {}, {:?}", rope, self.visual),
-        };
+            };
 
 		// find actual correct VisualLine
 		let mut cx: usize = cs - self.lines.line_to_char(rope);
@@ -206,10 +204,12 @@ impl Buffer {
 			cx -= self.visual[cy].len;
 			cy += 1;
 		}
-		(cx, cy /*- self.viewport.offset*/)		
+		(cx, cy)		
 	}
 
-    /// convert (col, row) indexes to the corresponding Rope index
+    /// convert (col, row) indexes to the corresponding Rope index.
+    ///
+    /// **NOTE**: cy is the relative to the viewport
 	pub fn visual_to_rope(&self, cx : usize, cy : usize) -> usize {
 		let vl = self.visual[cy + self.viewport.offset];
 		
@@ -220,24 +220,30 @@ impl Buffer {
 	}
 
     /// update visual line after the insertion/deletion of a *single* char.
-    /// runs in constant time, cant delete/insert visual lines
-	// fn update_visual_line(&mut self, insert: bool) {
-    //     let (cx, cy) = self.get_cursor_pos();
-    //     let abs_cy = cy + self.viewport.offset;
-    //     if insert {
-    //
-    //     } else {
-    //         if 0 == 0 { self.build_visual_line(); }
-    //         else {
-    //             self.visual[abs_cy].len -= 1;
-    //         }
-    //     }
-	// }
+    /// runs in constant time if there's no need to delete/insert visual lines.
+    /// otherwise calls build_visual_line().
+	fn update_visual_line(&mut self, c: Option<char>) {
+        let (cx, cy) = self.rope_to_visual(self.cs);
+        match c {
+            Some(c) => {
+                if c == '\n' {
+                    self.build_visual_line();
+                } else if self.viewport.width >= self.visual[cy].len + 1 {
+                    self.visual[cy].len += 1;
+                } else { self.build_visual_line(); }
+            },
+            None => {
+                // no idea why but the +1 is necessary
+                if self.visual[cy].len > cx + 1 && cx > 0 {
+                    self.visual[cy].len -= 1;
+                } else { self.build_visual_line(); }
+            }
+        }
+	}
 
     /// completely rebuilds self.visual.
     /// *can* deal with terminal copy/paste correctly
     fn build_visual_line(&mut self) {
-
         self.visual = self.lines.lines()
             .enumerate()
             .flat_map(|(i, line)| {
@@ -259,7 +265,6 @@ impl Buffer {
                 if line.len_chars() == 0 {
                     vec.push( VisualLine { offset: 0, len: 0, rope: i } );
                 }
-
                 vec
             })
             .collect();
@@ -325,13 +330,15 @@ pub enum Direction {
 mod tests {
     use super::*;
 
-    // #[test]
-    // fn modified_indicator() {
-    //     let mut buf = Buffer::new(20,20);
-    //     assert!(!buf.history.is_dirty());
-    //     buf.insert('c');
-    //     assert!(buf.history.is_dirty());
-    // }
+    #[test]
+    fn modified_indicator() {
+        let mut buf = Buffer::new(20,20);
+        assert!(!buf.history.is_dirty());
+        buf.insert('c');
+        assert!(buf.history.is_dirty());
+        buf.undo();
+        assert!(!buf.history.is_dirty());
+    }
 
     #[test]
     fn undo() {

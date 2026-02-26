@@ -71,10 +71,7 @@ impl EditAction for char {
     }
 }
 
-impl<T> EditAction for T
-where
-    T: Fn() -> bool
-{
+impl<T: Fn() -> bool> EditAction for T {
     fn should_stash(&self) -> bool {
         self()
     }
@@ -82,8 +79,8 @@ where
 
 #[derive(Default, Clone)]
 pub struct Edit {
-    pub text      : ropey::Rope,
-    pub cs        : usize,
+    pub text: ropey::Rope,
+    pub cs  : usize,
 }
 
 impl Edit {
