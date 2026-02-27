@@ -98,14 +98,13 @@ impl Buffer {
 				amt -= inc;
 			}
 		}
-		self.viewport_fix_offset();
+		_ = self.viewport_fix_offset(Option::None);
 	}
 
 	/// this is used to move the cursor an exact amt of spaces.
     /// **NOTE**: aside from undo actions (and the tiny if on delete), 
     /// only this fn updates the viewport
     fn cursor_mv_exact(&mut self, dir: Direction, amt: i32) {
-
         match dir {
             // has to cache the max cx
             Direction::Vert => {
@@ -115,27 +114,15 @@ impl Buffer {
                     || (cy + amt + self.viewport.offset as i32) >= self.visual.len() as i32 
                 { 
                     return; 
-                }                
-                // fix viewport: cy
-                let new_cy = if cy + amt < 0 || cy + amt > self.viewport.height as i32 -1 {
-                    self.viewport.offset = {
-                        if amt > 0 { self.viewport.offset +amt as usize}
-                        else { self.viewport.offset - (-amt) as usize }
-                    };
-                    cy
-                } else {
-                    cy + amt
-                };
-                // now handle cx and its cached value
-                let len = self.visual[new_cy as usize + self.viewport.offset].len;
-                let cx = if len > self.cached_cx +1 { 
-                    self.cached_cx 
-                } else if new_cy +1 == self.visual.len() as i32 { 
-                    // off by one mistake bc the last line dont have a newline char
-                    len 
-                } else { 1.max(len) -1 };
-
-				self.cs = self.visual_to_rope(cx, new_cy as usize);
+                }
+                let len = self.visual[(cy + amt + self.viewport.offset as i32) as usize].len;
+				// special case: the last line dont have a newline char
+				let end = if cy + amt + 1 == self.visual.len() as i32 { len } else { 1.max(len) -1 };
+				let diff = self.viewport.offset as i32 - self.viewport_fix_offset(Some(cy + amt)) as i32;
+				self.cs = self.visual_to_rope(
+					end.min(self.cached_cx),
+					(cy + amt + diff) as usize
+				);
             },
             Direction::Horiz => {
                 // check bounds
@@ -145,17 +132,9 @@ impl Buffer {
                 {
                     return;
                 } 
-                // fix viewport
-                let (cx, cy) = self.get_cursor_pos();
-                if cy == 0 && cx + amt < 0 && self.viewport.offset > 0 {
-                    self.viewport.offset -= 1.max(amt.wrapping_abs() as usize / self.viewport.width);
-                } else if cy == self.viewport.height as i32 -1 && 
-                    cx + amt > self.visual[cy as usize + self.viewport.offset].len as i32 -1
-                {
-                    self.viewport.offset += 1.max(amt.wrapping_abs() as usize / self.viewport.width);
-                }
-
                 self.cs = (amt + self.cs as i32) as usize;
+                // fix viewport
+                _ = self.viewport_fix_offset(Option::None);
                 // update the cached cx
                 self.cached_cx = self.get_cursor_pos().0 as usize;
             },
@@ -184,7 +163,7 @@ impl Buffer {
         self.cs = edit.cs;
 
         self.build_visual_line();
-		self.viewport_fix_offset();
+		_ = self.viewport_fix_offset(Option::None);
     }
 
 	/// redoes an edit.
@@ -196,7 +175,7 @@ impl Buffer {
             self.cs = edit.cs;
 
 			self.build_visual_line();
-            self.viewport_fix_offset();
+            _ = self.viewport_fix_offset(Option::None);
         }
     }
 
@@ -213,7 +192,7 @@ impl Buffer {
             .position(|vl| vl.rope == rope) {
                 Some(i) => i + rope,
                 None => panic!("was looking for rope {}, {:?}", rope, self.visual),
-            };
+		};
 
 		// find actual correct VisualLine
 		let mut cx: usize = cs - self.lines.line_to_char(rope);
@@ -294,20 +273,22 @@ impl Buffer {
         self.viewport.height = height;
         // 
 		self.build_visual_line();
-        self.viewport_fix_offset();
+        _ = self.viewport_fix_offset(Option::None);
     }
     
     /// fixes offset related to undo/redo/resize operations.
     /// 
-    /// rebuilds visual lines also, as this is a prerequisite.
-    fn viewport_fix_offset(&mut self) {
+    /// future_cy is used in case viewport should be fixed before moving cursor.
+	/// returns new offset.
+    fn viewport_fix_offset(&mut self, future_cy: Option<i32>) -> usize {
         // check if offset is correct 
-        let (_, cy) = self.get_cursor_pos();
+        let cy = future_cy.unwrap_or(self.get_cursor_pos().1);
         if cy < 0 {
             self.viewport.offset -= (-cy) as usize;
         } else if cy >= self.viewport.height as i32 {
             self.viewport.offset += cy as usize - self.viewport.height + 1; 
         }
+		self.viewport.offset
     }
 
     pub fn is_modified(&self) -> bool {

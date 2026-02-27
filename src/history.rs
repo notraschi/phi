@@ -47,6 +47,7 @@ impl History {
     /// registers a save in the history
     pub fn save(&mut self) {
         self.saved = self.curr;
+		self.dirty = false;
     }
 }
 
