@@ -49,7 +49,6 @@ impl Buffer {
         // inserting
         self.lines.insert_char(self.cs, char);
 		// visual lines
-        // self.build_visual_line();
         self.update_visual_line(Some(char));
         // 
         self.cursor_mv(Move::Exact(Direction::Horiz, 1), false);
@@ -307,7 +306,7 @@ impl Buffer {
         if cy < 0 {
             self.viewport.offset -= (-cy) as usize;
         } else if cy >= self.viewport.height as i32 {
-            self.viewport.offset += cy as usize; 
+            self.viewport.offset += cy as usize - self.viewport.height + 1; 
         }
     }
 

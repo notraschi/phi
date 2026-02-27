@@ -109,7 +109,16 @@ impl Editor {
 					_ => {}
 				}
             }
-            
+			// shift pressed
+			KeyEvent {
+				modifiers: KeyModifiers::SHIFT,
+				code, ..
+			} => {
+				match code {
+					KeyCode::Char(c) => buf.insert(c),
+					_ => {}
+				}
+            }
             // no modifier
             KeyEvent {
                 modifiers: KeyModifiers::NONE,
@@ -117,7 +126,7 @@ impl Editor {
             } => {
                 match code {
                     // key handling
-                    KeyCode::Char(_) => buf.insert(code.as_char().unwrap()),
+                    KeyCode::Char(c) => buf.insert(c),
                     KeyCode::Enter => buf.insert('\n'),
                     KeyCode::Backspace => buf.delete(1),
                     
