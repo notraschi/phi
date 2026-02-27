@@ -80,12 +80,16 @@ pub struct Write;
 impl Command for Write {
     fn name(&self) -> &'static str { "w" }
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
-        if args.len() > 1 { return Err("too many args".to_owned()); }
+        if args.len() > 2 { return Err("too many args".to_owned()); }
 
         let buf = ed.active_buf_mut();
+		let filename = args.get(1).unwrap_or(&buf.filename).clone();
+		if buf.filename != filename {
+			buf.filename = filename.to_string();
+		}
 		buf.save();
         let mut wr = std::io::BufWriter::new(
-            convert_res(std::fs::File::create(&buf.filename))
+            convert_res(std::fs::File::create(&filename))
         ?);
 
         convert_res(buf.lines.write_to(&mut wr))?;
@@ -103,11 +107,6 @@ impl Command for Quit {
         if args.len() > 1 { return Err("too many args".to_owned()); }
 
         ratatui::restore();
-        // convert_res(crossterm::execute!(
-        //     std::io::stdout(), 
-        //     crossterm::terminal::LeaveAlternateScreen
-        // ))?;
-        // convert_res(crossterm::terminal::disable_raw_mode())?;
         ed.alive = false;
         Ok(())
     }
