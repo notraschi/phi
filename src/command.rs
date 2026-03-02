@@ -1,73 +1,139 @@
 use crate::{buffer::Buffer, Editor};
-
+use std::{collections::HashMap, rc::Rc};
 
 /*
-* p[rompt struct - stores info regarding the prompt prompt
+* prompt struct - stores info regarding the prompt prompt
 */
-#[allow(unused)]
-#[derive(Default)]
 pub struct Prompt {
-    pub cmd : String,
     pub cx  : usize,
-    is_msg  : bool,
+    msg  	: Option<String>,
+	history : Vec<String>,
+	curr	: usize,
+	comds  	: HashMap<&'static str, Rc<dyn Command>>
 }
 
-#[allow(unused)]
 impl Prompt {
+	pub fn load_commands(&mut self) {
+		self.comds.insert(Write.name(), Rc::new(Write));
+        self.comds.insert(Quit.name(), Rc::new(Quit));
+        self.comds.insert(Edit.name(), Rc::new(Edit));
+        self.comds.insert(Undo.name(), Rc::new(Undo));
+        self.comds.insert(Redo.name(), Rc::new(Redo));
+        self.comds.insert(SwitchBuffer.name(), Rc::new(SwitchBuffer));
+	}
 
+
+	/// insert char in cmd.
     pub fn insert(&mut self, char : char) {
+		// editing in the history copies that entry as the latest
+		self.check_history_update_on_edit();
+		let cmd = &mut self.history[self.curr];
         // is a msg was displayed
-        if self.is_msg { 
-            self.cmd.clear(); 
-            self.is_msg = false; 
+        if self.msg.is_some() { 
+            cmd.clear(); 
+            self.msg = Option::None; 
         }
 
-        let byte_index = self.cmd.char_indices()
+        let byte_index = cmd.char_indices()
             .nth(self.cx)
-            .map(|(i, _)|i)
-            .unwrap_or(self.cmd.len());
+            .map(|(i, _)| i)
+            .unwrap_or(cmd.len());
 
-        self.cmd.insert(byte_index, char);
+        cmd.insert(byte_index, char);
         self.cx += 1;
     }
 
+	/// remove a char from cmd.
     pub fn backspace(&mut self) {
+		self.check_history_update_on_edit();
         // is a msg was displayed
-        if self.is_msg { 
-            self.cmd.clear(); 
-            self.is_msg = false;
+		let cmd = &mut self.history[self.curr];
+        if self.msg.is_some() { 
+            cmd.clear(); 
+            self.msg = Option::None;
             return;
         }
         // -1 so we delete the char before
-        let byte_index = self.cmd.char_indices()
+        let byte_index = cmd.char_indices()
             .nth(self.cx -1)
             .map(|(i, _)|i)
-            .unwrap_or(self.cmd.len());
+            .unwrap_or(cmd.len());
 
-        _ = self.cmd.remove(byte_index ); 
+        _ = cmd.remove(byte_index ); 
         self.cx -= 1;
     }
 
-    pub fn parse(&mut self) -> Option<Vec<String>> {
-        
-        if self.cmd.is_empty() { return None; }
-
-        let args = self.cmd.split_ascii_whitespace()
+	/// parse the command and split it into arguments.
+    pub fn parse(&mut self) -> Vec<String> {
+		let args = self.history[self.curr].split_ascii_whitespace()
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
 
-        self.cmd.clear();
-
-        Some(args)
+		args
     }
+
+	/// gets a command and updates history.
+	pub fn get_command(&mut self, args: &Vec<String>) -> Option<Rc<dyn Command>> {
+		let cmd_name = args[0].as_str();
+		// insert new elem if the cmd ran was the latest
+		if !self.history.last().unwrap().is_empty() && !self.history[self.curr].is_empty() {
+			self.history.push("".to_owned());
+		}
+		self.curr = self.history.len() - 1;
+		
+		self.comds.get(cmd_name).cloned()
+	}
 
     /// shows a msg in the prompt to display to the user. 
-    /// when user types something, the msg is removed
+    /// when user types something, the msg is removed.
     pub fn msg(&mut self, msg : String) {
-        self.cmd = msg;
+        self.msg = Some(msg);
         self.cx = 0;
-        self.is_msg = true
     }
+
+	/// goes in the past.
+	pub fn history_back(&mut self) {
+		self.curr = self.curr.saturating_sub(1);
+		self.cx = self.history[self.curr].len();
+		self.msg = Option::None;
+	}
+
+	/// goes in the future.
+	pub fn history_forward(&mut self) {
+		self.curr = (self.curr + 1).min(self.history.len() - 1);
+		self.cx = self.history[self.curr].len();
+		self.msg = Option::None;
+	}
+
+	/// helper to check if this entry is to be copied as the latest.
+	/// this occurs when modifying the history.
+	fn check_history_update_on_edit(&mut self) {
+		if self.curr != self.history.len() -1 {
+			// removes the empty prompt
+			_ = self.history.pop();
+			self.history.extend_from_within(self.curr..=self.curr);
+			self.curr = self.history.len() -1;
+		}
+	}
+
+	pub fn display<'a>(&'a self) -> &'a str {
+		match &self.msg {
+			Option::None => &self.history[self.curr].as_str(),
+			Some(msg) => &msg.as_str()
+		}
+	}
+}
+
+impl Default for Prompt {
+	fn default() -> Self {
+		Self {
+			cx : 0,
+			msg  : Default::default(),
+			history : vec!["".to_owned()],
+			curr	: 0,
+			comds  : Default::default()
+		}
+	}
 }
 
 pub trait Command {
@@ -192,4 +258,27 @@ fn convert_res<T>(res : std::io::Result<T>) -> Result<T, String> {
         Ok(v) => Ok(v),
         Err(e) => Err(e.to_string())
     }
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn history_test() {
+		let mut p = Prompt::default();
+		{
+			let cmd = &mut p.history[p.curr];
+			*cmd = "ciao come stai".to_string();
+		}
+		assert!(p.history.len() == 1);
+		let x = p.parse();
+		p.get_command(&x);
+		assert!(p.history.len() == 2);
+		assert!(p.history[p.curr].is_empty());
+		p.history_back();
+		assert!(p.history[p.curr] == "ciao come stai".to_string());
+		p.history_forward();
+		assert!(p.history[p.curr].is_empty());
+	}
 }

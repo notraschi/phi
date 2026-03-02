@@ -14,7 +14,7 @@ use crossterm::{
     event::{KeyCode, KeyEvent, KeyModifiers}, terminal::size
 };
 use ratatui::DefaultTerminal;
-use std::{collections::HashMap, io, rc::Rc};
+use std::io;
 
 use command::*;
 use buffer::*;
@@ -34,29 +34,20 @@ struct Editor {
 	padding : u16,
     // command stuff
     prompt : Prompt,
-    comds  : HashMap<&'static str, Rc<dyn command::Command>>
 }
 
 impl Default for Editor {
     fn default() -> Self {
-
-        // inserting commands into the editor
-        let mut comds: HashMap<_, Rc<dyn command::Command>> = HashMap::new();
-        comds.insert(Write.name(), Rc::new(command::Write));
-        comds.insert(Quit.name(), Rc::new(Quit));
-        comds.insert(Edit.name(), Rc::new(Edit));
-        comds.insert(Undo.name(), Rc::new(Undo));
-        comds.insert(Redo.name(), Rc::new(Redo));
-        comds.insert(SwitchBuffer.name(), Rc::new(SwitchBuffer));
-
-        Self { bufs: Default::default(), 
+		let mut prompt = Prompt::default();
+		prompt.load_commands();
+        Self {
+			bufs: Default::default(), 
             active_buf: Default::default(),
             mode: Default::default(), 
             alive: Default::default(), 
 			offset : 5,
 			padding : 1,
-            prompt: Default::default(),
-            comds : comds,
+            prompt,
         }
     }
 }
@@ -139,32 +130,31 @@ impl Editor {
         match e {
             KeyCode::Char(c) => self.prompt.insert(c),
             KeyCode::Backspace => {
-                if self.prompt.cmd.is_empty() { self.mode = Mode::Insert; }
+                if self.prompt.display() == "" { self.mode = Mode::Insert; }
                 else { self.prompt.backspace(); }
             },
             KeyCode::Enter => { 
-                if let Some(args) = self.prompt.parse() {
-                    
-                    let cmd_name = args[0].as_str();
-                    if let Some(cmd) = self.comds.get(cmd_name).cloned() {
-                        match cmd.run(args, self) {
-                            Ok(()) => {
-                                self.prompt.cx = 0;
-                                self.mode = Mode::Insert;
-                            },
-                            Err(msg) => {
-                                self.prompt.msg(msg);
-                            }
-                        }
-                    } else {
-                        self.prompt.msg("not a command!".to_owned());
-                    }
-                }
+				let args = self.prompt.parse();
+				if args.is_empty() { self.mode = Mode::Insert; }
+				else if let Some(cmd) = self.prompt.get_command(&args) {
+					match cmd.run(args, self) {
+						Ok(()) => {
+							self.prompt.cx = 0;
+							self.mode = Mode::Insert;
+						},
+						Err(msg) => {
+							self.prompt.msg(msg);
+						}
+					}
+				} else {
+					self.prompt.msg("not a command!".to_owned());
+				}
             },
+			KeyCode::Up => self.prompt.history_back(),
+			KeyCode::Down => self.prompt.history_forward(),
             
             // quit prompt
             KeyCode::Esc => self.mode = Mode::Insert,
-            KeyCode::Home => self.mode = Mode::Insert,
             _ => {}
         }
     }

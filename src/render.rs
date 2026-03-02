@@ -91,7 +91,7 @@ pub fn render_command_prompt(frame: &mut Frame, ed: &Editor) {
 		height: ed.padding * 2 + 1
 	};
 	let prompt_outline = Block::bordered().title(":");
-	let prompt = Paragraph::new(ed.prompt.cmd.as_str())
+	let prompt = Paragraph::new(ed.prompt.display())
 		.block(prompt_outline);
 	frame.render_widget(Clear, prompt_area);
 	frame.render_widget(prompt, prompt_area);
