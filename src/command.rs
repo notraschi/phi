@@ -59,7 +59,7 @@ impl Prompt {
             .map(|(i, _)|i)
             .unwrap_or(cmd.len());
 
-        _ = cmd.remove(byte_index ); 
+        _ = cmd.remove(byte_index); 
         self.cx -= 1;
     }
 
@@ -94,14 +94,14 @@ impl Prompt {
 	/// goes in the past.
 	pub fn history_back(&mut self) {
 		self.curr = self.curr.saturating_sub(1);
-		self.cx = self.history[self.curr].len();
+		self.cx = self.history[self.curr].char_indices().count();
 		self.msg = Option::None;
 	}
 
 	/// goes in the future.
 	pub fn history_forward(&mut self) {
 		self.curr = (self.curr + 1).min(self.history.len() - 1);
-		self.cx = self.history[self.curr].len();
+		self.cx = self.history[self.curr].char_indices().count();
 		self.msg = Option::None;
 	}
 
@@ -146,12 +146,16 @@ pub struct Write;
 impl Command for Write {
     fn name(&self) -> &'static str { "w" }
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
-        if args.len() > 1 { return Err("too many args".to_owned()); }
+        if args.len() > 2 { return Err("too many args".to_owned()); }
 
         let buf = ed.active_buf_mut();
+		let filename = args.get(1).unwrap_or(&buf.filename).clone();
+		if buf.filename != filename {
+			buf.filename = filename.to_string();
+		}
 		buf.save();
         let mut wr = std::io::BufWriter::new(
-            convert_res(std::fs::File::create(&buf.filename))
+            convert_res(std::fs::File::create(&filename))
         ?);
 
         convert_res(buf.lines.write_to(&mut wr))?;
@@ -169,11 +173,6 @@ impl Command for Quit {
         if args.len() > 1 { return Err("too many args".to_owned()); }
 
         ratatui::restore();
-        // convert_res(crossterm::execute!(
-        //     std::io::stdout(), 
-        //     crossterm::terminal::LeaveAlternateScreen
-        // ))?;
-        // convert_res(crossterm::terminal::disable_raw_mode())?;
         ed.alive = false;
         Ok(())
     }
