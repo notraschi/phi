@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ciaomdsld
 sa
 das
@@ -50,4 +51,4 @@ affs
 dsd
 a f
 dasfds
-dasfsd f sdf sfd
+
