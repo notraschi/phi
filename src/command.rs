@@ -5,7 +5,7 @@ use std::{collections::HashMap, collections::VecDeque, rc::Rc};
 * prompt struct - stores info regarding the prompt prompt
 */
 pub struct Prompt {
-    pub cx  : usize,
+    cx  : usize,
     msg  	: Option<String>,
 	history : VecDeque<String>,
 	curr	: isize,
@@ -91,6 +91,7 @@ impl Prompt {
 		// housekeeping
 		self.curr = -1;
 		self.next.clear();
+		self.cx = 0;
 		//
 		self.comds.get(args[0].as_str()).cloned()
 	}

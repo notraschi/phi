@@ -152,7 +152,6 @@ impl Editor {
 				else if let Some(cmd) = self.prompt.get_command(&args) {
 					match cmd.run(args, self) {
 						Ok(()) => {
-							self.prompt.cx = 0;
 							self.mode = Mode::Insert;
 						},
 						Err(msg) => {
