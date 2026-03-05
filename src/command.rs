@@ -1,5 +1,5 @@
 use crate::{buffer::Buffer, Editor};
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, collections::VecDeque, rc::Rc};
 
 /*
 * prompt struct - stores info regarding the prompt prompt
@@ -7,12 +7,14 @@ use std::{collections::HashMap, rc::Rc};
 pub struct Prompt {
     pub cx  : usize,
     msg  	: Option<String>,
-	history : Vec<String>,
-	curr	: usize,
+	history : VecDeque<String>,
+	curr	: isize,
+	next	: String,
 	comds  	: HashMap<&'static str, Rc<dyn Command>>
 }
 
 impl Prompt {
+	/// loads all known commands into the prompt
 	pub fn load_commands(&mut self) {
 		self.comds.insert(Write.name(), Rc::new(Write));
         self.comds.insert(Quit.name(), Rc::new(Quit));
@@ -22,66 +24,75 @@ impl Prompt {
         self.comds.insert(SwitchBuffer.name(), Rc::new(SwitchBuffer));
 	}
 
-
 	/// insert char in cmd.
     pub fn insert(&mut self, char : char) {
-		// editing in the history copies that entry as the latest
-		self.check_history_update_on_edit();
-		let cmd = &mut self.history[self.curr];
-        // is a msg was displayed
+		self.check_on_edit_history();
+		// is msg displayed
         if self.msg.is_some() { 
-            cmd.clear(); 
+            self.next.clear(); 
             self.msg = Option::None; 
         }
 
-        let byte_index = cmd.char_indices()
+        let byte_index = self.next.char_indices()
             .nth(self.cx)
             .map(|(i, _)| i)
-            .unwrap_or(cmd.len());
+            .unwrap_or(self.next.len());
 
-        cmd.insert(byte_index, char);
+        self.next.insert(byte_index, char);
         self.cx += 1;
     }
 
 	/// remove a char from cmd.
     pub fn backspace(&mut self) {
-		self.check_history_update_on_edit();
+		self.check_on_edit_history();
         // is a msg was displayed
-		let cmd = &mut self.history[self.curr];
         if self.msg.is_some() { 
-            cmd.clear(); 
+            self.next.clear(); 
             self.msg = Option::None;
             return;
         }
         // -1 so we delete the char before
-        let byte_index = cmd.char_indices()
+        let byte_index = self.next.char_indices()
             .nth(self.cx -1)
             .map(|(i, _)|i)
-            .unwrap_or(cmd.len());
+            .unwrap_or(self.next.len());
 
-        _ = cmd.remove(byte_index); 
+        _ = self.next.remove(byte_index); 
         self.cx -= 1;
     }
+	
+	/// when editing a history item, that items content should be cloned to next.
+	/// also cx is to be repositioned at the end of the line.
+	fn check_on_edit_history(&mut self) {
+		if self.curr != -1 {
+			self.next = self.history[self.curr as usize].clone();
+			self.cx = self.next.char_indices().count();
+			self.curr = -1;
+		}
+	}
 
 	/// parse the command and split it into arguments.
-    pub fn parse(&mut self) -> Vec<String> {
-		let args = self.history[self.curr].split_ascii_whitespace()
-            .map(|s| s.to_string())
-            .collect::<Vec<String>>();
-
-		args
+    pub fn parse (&mut self) -> Vec<String> {
+		self.history.get(self.curr as usize)
+			.map_or(self.next.trim(), |v| v)
+			.split_ascii_whitespace()
+			.map(|s| s.to_string())
+            .collect::<Vec<_>>()
     }
 
 	/// gets a command and updates history.
 	pub fn get_command(&mut self, args: &Vec<String>) -> Option<Rc<dyn Command>> {
-		let cmd_name = args[0].as_str();
-		// insert new elem if the cmd ran was the latest
-		if !self.history.last().unwrap().is_empty() && !self.history[self.curr].is_empty() {
-			self.history.push("".to_owned());
+		if self.next.trim().is_empty() && self.curr == -1 {
+			return Option::None;
 		}
-		self.curr = self.history.len() - 1;
-		
-		self.comds.get(cmd_name).cloned()
+		if self.curr == -1 {
+			self.history.push_front(self.next.trim().to_owned());
+		}
+		// housekeeping
+		self.curr = -1;
+		self.next.clear();
+		//
+		self.comds.get(args[0].as_str()).cloned()
 	}
 
     /// shows a msg in the prompt to display to the user. 
@@ -93,33 +104,26 @@ impl Prompt {
 
 	/// goes in the past.
 	pub fn history_back(&mut self) {
-		self.curr = self.curr.saturating_sub(1);
-		self.cx = self.history[self.curr].char_indices().count();
+		self.curr = (self.curr + 1).min(self.history.len() as isize - 1);
 		self.msg = Option::None;
 	}
 
 	/// goes in the future.
 	pub fn history_forward(&mut self) {
-		self.curr = (self.curr + 1).min(self.history.len() - 1);
-		self.cx = self.history[self.curr].char_indices().count();
+		self.curr = (-1).max(self.curr -1);
 		self.msg = Option::None;
 	}
 
-	/// helper to check if this entry is to be copied as the latest.
-	/// this occurs when modifying the history.
-	fn check_history_update_on_edit(&mut self) {
-		if self.curr != self.history.len() -1 {
-			// removes the empty prompt
-			_ = self.history.pop();
-			self.history.extend_from_within(self.curr..=self.curr);
-			self.curr = self.history.len() -1;
-		}
-	}
-
-	pub fn display<'a>(&'a self) -> &'a str {
+	/// returns the message that should currently be displayed on the prompt
+	pub fn display<'a>(&'a self) -> (&'a str, usize) {
 		match &self.msg {
-			Option::None => &self.history[self.curr].as_str(),
-			Some(msg) => &msg.as_str()
+			Option::None => if self.curr == -1 {
+					(&self.next.as_str(), self.cx)
+				} else {
+					let tmp = &self.history[self.curr as usize];
+					(&self.history[self.curr as usize].as_str(), tmp.char_indices().count())
+				},
+			Some(msg) => (&msg.as_str(), 0)
 		}
 	}
 }
@@ -129,9 +133,10 @@ impl Default for Prompt {
 		Self {
 			cx : 0,
 			msg  : Default::default(),
-			history : vec!["".to_owned()],
-			curr	: 0,
-			comds  : Default::default()
+			history : Default::default(),
+			curr	: -1,
+			next	: Default::default(),
+			comds   : Default::default()
 		}
 	}
 }
@@ -264,20 +269,77 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn history_test() {
+	fn no_history_test() {
 		let mut p = Prompt::default();
-		{
-			let cmd = &mut p.history[p.curr];
-			*cmd = "ciao come stai".to_string();
-		}
-		assert!(p.history.len() == 1);
-		let x = p.parse();
-		p.get_command(&x);
-		assert!(p.history.len() == 2);
-		assert!(p.history[p.curr].is_empty());
+		p.next = "bang".to_owned();
+		// back and forth no history
 		p.history_back();
-		assert!(p.history[p.curr] == "ciao come stai".to_string());
+		p.history_back();
+		assert_eq!(p.next, "bang".to_string());
 		p.history_forward();
-		assert!(p.history[p.curr].is_empty());
+		p.history_forward();
+		assert_eq!(p.next, "bang".to_string());
+	}
+
+	#[test]
+	fn back_after_typing_test() {
+		let mut p = Prompt::default();
+		p.next = "bang".to_owned();
+		let tmp = p.parse();
+		_ = p.get_command(&tmp);
+		p.next = "yo".to_string();
+		p.history_back();
+		assert_eq!(p.display().0, "bang");
+		p.history_forward();
+		assert_eq!(p.curr, -1);
+		assert_eq!(p.history.len(), 1);
+		assert_eq!(p.display().0, "yo");
+	}
+
+	#[test]
+	fn blank_prompt_test() {
+		let mut p = Prompt::default();
+		assert_eq!(0, p.history.len());
+		assert!(p.next.is_empty());
+		let x = p.parse();
+		_ = p.get_command(&x);
+		assert!(p.history.is_empty());
+	}
+
+	#[test]
+	fn edit_history_test() {
+		let mut p = Prompt::default();
+		p.next = "comando 1".to_string();
+		let tmp = p.parse();
+		_ = p.get_command(&tmp);
+		assert!(p.next.is_empty());
+		p.history_back();
+		p.insert('1');
+		assert_eq!(-1, p.curr);
+		assert_eq!(1, p.history.len());
+		assert_eq!("comando 1".to_string(), p.history[0]);
+		assert_eq!("comando 11".to_string(), p.next);
+		assert_eq!("comando 11", p.display().0);
+	}
+
+	#[test]
+	fn run_from_history_test() {
+		let mut p = Prompt::default();
+		p.load_commands();
+		p.next = "undo".to_string();
+		let tmp = p.parse();
+		assert!(p.get_command(&tmp).is_some());
+		p.history_back();
+		assert!(p.next.is_empty());
+		assert_eq!(0, p.curr);
+		let tmp = p.parse();
+		assert!(p.get_command(&tmp).is_some());
+		//
+		p.next = "not ran".to_string();
+		p.history_back();
+		let tmp = p.parse();
+		_ = p.get_command(&tmp);
+		assert_eq!(1, p.history.len());
+		assert!(p.next.is_empty());
 	}
 }

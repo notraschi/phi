@@ -130,7 +130,7 @@ impl Editor {
         match e {
             KeyCode::Char(c) => self.prompt.insert(c),
             KeyCode::Backspace => {
-                if self.prompt.display() == "" { self.mode = Mode::Insert; }
+                if self.prompt.display().0 == "" { self.mode = Mode::Insert; }
                 else { self.prompt.backspace(); }
             },
             KeyCode::Enter => { 

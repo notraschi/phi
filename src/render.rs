@@ -91,13 +91,14 @@ pub fn render_command_prompt(frame: &mut Frame, ed: &Editor) {
 		height: ed.padding * 2 + 1
 	};
 	let prompt_outline = Block::bordered().title(":");
-	let prompt = Paragraph::new(ed.prompt.display())
+	let disp = ed.prompt.display();
+	let prompt = Paragraph::new(disp.0)
 		.block(prompt_outline);
 	frame.render_widget(Clear, prompt_area);
 	frame.render_widget(prompt, prompt_area);
 	// sets cursor position
 	frame.set_cursor_position((
-		ed.prompt.cx as u16 + ed.padding,
+		disp.1 as u16 + ed.padding,
 		prompt_area.y + ed.padding
 	));
 }
