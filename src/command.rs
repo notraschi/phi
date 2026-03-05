@@ -60,13 +60,22 @@ impl Prompt {
         _ = self.next.remove(byte_index); 
         self.cx -= 1;
     }
+
+	pub fn cursor_left(&mut self) {
+		self.cx = self.cx.saturating_sub(1);
+	}
+
+	pub fn cursor_right(&mut self) {
+		if self.curr == -1 {
+			self.cx = self.next.len().min(self.cx + 1);
+		}
+	}
 	
 	/// when editing a history item, that items content should be cloned to next.
 	/// also cx is to be repositioned at the end of the line.
 	fn check_on_edit_history(&mut self) {
 		if self.curr != -1 {
 			self.next = self.history[self.curr as usize].clone();
-			self.cx = self.next.char_indices().count();
 			self.curr = -1;
 		}
 	}
@@ -106,12 +115,19 @@ impl Prompt {
 	/// goes in the past.
 	pub fn history_back(&mut self) {
 		self.curr = (self.curr + 1).min(self.history.len() as isize - 1);
+		self.cx = if self.curr == -1 {
+			&self.next
+		} else {
+			&self.history[self.curr as usize]
+		}.char_indices().count();
 		self.msg = Option::None;
 	}
 
 	/// goes in the future.
 	pub fn history_forward(&mut self) {
+		if self.curr == -1 { return; }
 		self.curr = (-1).max(self.curr -1);
+		self.cx = self.next.char_indices().count();
 		self.msg = Option::None;
 	}
 
@@ -121,8 +137,7 @@ impl Prompt {
 			Option::None => if self.curr == -1 {
 					(&self.next.as_str(), self.cx)
 				} else {
-					let tmp = &self.history[self.curr as usize];
-					(&self.history[self.curr as usize].as_str(), tmp.char_indices().count())
+					(&self.history[self.curr as usize].as_str(), self.cx)
 				},
 			Some(msg) => (&msg.as_str(), 0)
 		}
@@ -315,12 +330,13 @@ mod tests {
 		_ = p.get_command(&tmp);
 		assert!(p.next.is_empty());
 		p.history_back();
-		p.insert('1');
+		p.cursor_left();
+		p.insert('2');
 		assert_eq!(-1, p.curr);
 		assert_eq!(1, p.history.len());
 		assert_eq!("comando 1".to_string(), p.history[0]);
-		assert_eq!("comando 11".to_string(), p.next);
-		assert_eq!("comando 11", p.display().0);
+		assert_eq!("comando 21".to_string(), p.next);
+		assert_eq!("comando 21", p.display().0);
 	}
 
 	#[test]

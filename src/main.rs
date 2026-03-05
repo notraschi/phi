@@ -164,6 +164,8 @@ impl Editor {
             },
 			KeyCode::Up => self.prompt.history_back(),
 			KeyCode::Down => self.prompt.history_forward(),
+			KeyCode::Left => self.prompt.cursor_left(),
+			KeyCode::Right => self.prompt.cursor_right(),
             
             // quit prompt
             KeyCode::Esc => self.mode = Mode::Insert,
