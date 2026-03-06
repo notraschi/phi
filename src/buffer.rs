@@ -141,6 +141,24 @@ impl Buffer {
         }
     }
 
+	/// moves the cursor to the beginning of the rope line
+	pub fn cursor_home(&mut self) {
+		let tmp = self.lines.char_to_line(self.cs);
+		self.cs = self.lines.line_to_char(tmp);
+		self.cached_cx = 0;
+	}
+
+	/// moves the cursor to the end of the rope line
+	pub fn cursor_end(&mut self) {
+		self.cs = if self.lines.char_to_line(self.cs) + 1 < self.lines.len_lines() {
+			let tmp = self.lines.char_to_line(self.cs) +1;
+			self.lines.line_to_char(tmp) -1
+		} else {
+			self.lines.len_chars()
+		};
+		self.cached_cx = self.get_cursor_pos().0 as usize;
+	}
+
     /// wrapper method to get the cursor (cx, cy) coords
     /// 
     /// **NOTE**: cy is the *relative* position, meaning it takes
@@ -335,7 +353,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn modified_indicator() {
+    fn modified_indicator_test() {
         let mut buf = Buffer::new(20,20);
         assert!(!buf.history.is_dirty());
         buf.insert('c');
@@ -345,7 +363,7 @@ mod tests {
     }
 
     #[test]
-    fn undo() {
+    fn undo_test() {
         let mut buf = Buffer::new(20, 20);
         buf.undo();
         assert_eq!(1, buf.history.timeline.len(), "no new item in timeline (no change)");
@@ -357,5 +375,25 @@ mod tests {
         buf.undo();
         assert_eq!("c", buf.lines.to_string());
         buf.redo();
+    }
+	
+	#[test]
+    fn home_end_test() {
+        let mut buf = Buffer::new(5,5);
+		buf.lines = ropey::Rope::from("123456789");
+		buf.cs = 8;
+		buf.cursor_home();
+		assert_eq!(buf.cs, 0);
+		//
+		buf.cursor_end();
+		assert_eq!(buf.cs, 9);
+		//
+		buf.lines = ropey::Rope::from("123\n\n678");
+		buf.cs = 7;
+		buf.cursor_home();
+		assert_eq!(buf.cs, 5);
+		buf.cs = 2;
+		buf.cursor_end();
+		assert_eq!(buf.cs, 3);
     }
 }

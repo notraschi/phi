@@ -131,6 +131,9 @@ impl Editor {
                     KeyCode::Down => buf.cursor_mv(Move::Exact(Direction::Vert, 1), true),
                     KeyCode::Right => buf.cursor_mv(Move::Exact(Direction::Horiz, 1), true),
                     KeyCode::Left => buf.cursor_mv(Move::Exact(Direction::Horiz, -1), true),
+
+					KeyCode::Home => buf.cursor_home(),
+					KeyCode::End => buf.cursor_end(),
                     
                     _ => {} 
                 }
