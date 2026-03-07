@@ -6,6 +6,7 @@ use ratatui::{
 };
 use crate::buffer::{VisualLine, ViewPort};
 use crate::Editor;
+use std::{borrow::Cow, fmt::Write};
 
 pub struct BufferWidget<'a> {
 	line_number_offset: u16,
@@ -39,15 +40,20 @@ impl<'a> Widget for BufferWidget<'a> {
 		let vp_end   = self.viewport.offset + self.viewport.height;
 		// visual lines inside viewport
 		let vls = &self.visual[vp_start..vp_end.min(self.visual.len())];
+		// line number buffer to not allocate with a to_string every frame
+		let mut ln_buf = String::new();
 		for (i, vl) in vls.iter().enumerate() {
 			let start = self.visual_to_rope(0, i);
 			let text = self.rope.slice(start..start + vl.len);
 			// print line numbers
 			if i == 0 || vls[i -1].rope != vl.rope {
+				// writing a char is faster than allocating a string
+				ln_buf.clear();
+				write!(&mut ln_buf, "{}", vl.rope).unwrap();
 				buf.set_stringn(
 					layout[0].x,
 					layout[0].y + i as u16,
-					vl.rope.to_string(),
+					&ln_buf,
 					self.line_number_offset as usize,
 					ratatui::style::Style::default(),
 				);
@@ -56,7 +62,7 @@ impl<'a> Widget for BufferWidget<'a> {
 			buf.set_string(
 				layout[1].x,
 				layout[1].y + i as u16,
-				text.to_string(), // avoid maybe
+				Cow::from(text), // use match text.as_str() if needed
 				ratatui::style::Style::default()
 			);
 		}
