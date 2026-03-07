@@ -18,7 +18,21 @@ impl Selection {
 
 	fn ctx<'a>(&self, ctx: &'a ropey::Rope) -> ropey::RopeSlice<'a> {
 		if self.active {
-			ctx.slice(self.range_raw())
+			match self.mode {
+				SelectionMode::Char => ctx.slice(self.range_raw()),
+				SelectionMode::Line => {
+					let r = self.range_raw();
+					let tmp = ctx.char_to_line(r.start);
+					let start = ctx.line_to_char(tmp);
+					let tmp = ctx.char_to_line(r.end);
+					let end = if tmp + 1 < ctx.len_lines() {
+						ctx.line_to_char(tmp +1) -1
+					} else {
+						ctx.len_chars()
+					};
+					ctx.slice(start..end)
+				}
+			}
 		} else {
 			ctx.slice(0..0)
 		}
@@ -42,17 +56,30 @@ impl Default for SelectionMode {
 	}
 }
 
+#[allow(unused_imports)]
 mod tests {
 	use super::*;
 
 	#[test]
-	fn ctx_test() {
+	fn ctx_char_test() {
 		let mut s = Selection::default();
 		let c = ropey::Rope::from("123456789");
 		s.end = 4;
 		assert_eq!(s.ctx(&c), "");
 		s.active = true;
 		assert_eq!(s.ctx(&c), "1234");
+	}
+
+	#[test]
+	fn ctx_line_test() {
+		let mut s = Selection::default();
+		let c = ropey::Rope::from("1234\n56\n89");
+		s.mode = SelectionMode::Line;
+		s.anchor = 1;
+		s.end = 5;
+		assert_eq!(s.ctx(&c), "");
+		s.active = true;
+		assert_eq!(s.ctx(&c), "1234\n56");
 	}
 }
 
