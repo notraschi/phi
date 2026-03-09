@@ -22,6 +22,8 @@ impl Prompt {
         self.comds.insert(Undo.name(), Rc::new(Undo));
         self.comds.insert(Redo.name(), Rc::new(Redo));
         self.comds.insert(Select.name(), Rc::new(Select));
+        self.comds.insert(Copy.name(), Rc::new(Copy));
+        self.comds.insert(Paste.name(), Rc::new(Paste));
         self.comds.insert(SwitchBuffer.name(), Rc::new(SwitchBuffer));
 	}
 
@@ -280,6 +282,37 @@ impl Command for Select {
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
         if args.len() > 1 { return Err("too many args".to_owned()); }
         ed.active_buf_mut().selection_begin();
+        Ok(())
+    }
+}
+
+/// paste
+pub struct Paste;
+impl Command for Paste {
+    fn name(&self) -> &'static str { "p" }
+    fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
+        if args.len() > 1 { return Err("too many args".to_owned()); }
+		let text = ed.reg.clone();
+		let buf = ed.active_buf_mut();
+		for c in text.chars() {
+			buf.insert(c);
+		}
+		buf.selection_end();
+        Ok(())
+    }
+}
+
+/// copy
+pub struct Copy;
+impl Command for Copy {
+    fn name(&self) -> &'static str { "y" }
+    fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
+        if args.len() > 1 { return Err("too many args".to_owned()); }
+		let buf = ed.active_buf();
+		if !buf.selection.active { return Err("no selection".to_owned()); }
+
+		ed.reg = buf.selection.clone_ctx(&buf.lines);
+		ed.active_buf_mut().selection_end();
         Ok(())
     }
 }

@@ -25,15 +25,17 @@ use buffer::*;
 #[allow(unused)]
 struct Editor {
     // buffer stuff
-    bufs : Vec<Buffer>,
-    active_buf : usize,
+    bufs: Vec<Buffer>,
+    active_buf: usize,
     // misc
-    mode : Mode,
-    alive : bool,
-	offset : u16,
-	padding : u16,
+    mode: Mode,
+    alive: bool,
+	offset: u16,
+	padding: u16,
     // command stuff
-    prompt : Prompt,
+    prompt: Prompt,
+	// registers
+	pub reg: ropey::Rope,
 }
 
 impl Default for Editor {
@@ -48,6 +50,7 @@ impl Default for Editor {
 			offset : 5,
 			padding : 1,
             prompt,
+			reg: Default::default()
         }
     }
 }
