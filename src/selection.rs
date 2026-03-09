@@ -3,20 +3,20 @@ use std::ops::Range;
 #[derive(Default)]
 #[allow(unused)]
 pub struct Selection {
-	active: bool,
+	pub active: bool,
 	// both are indexes into the rope
-	anchor: usize,
-	end: usize,
-	mode: SelectionMode
+	pub anchor: usize,
+	pub end: usize,
+	pub mode: SelectionMode
 }
 
 #[allow(unused)]
 impl Selection {
-	fn range_raw(&self) -> Range<usize> {
+	pub fn range_raw(&self) -> Range<usize> {
 		self.anchor.min(self.end)..self.anchor.max(self.end)
 	}
 
-	fn ctx<'a>(&self, ctx: &'a ropey::Rope) -> ropey::RopeSlice<'a> {
+	pub fn ctx<'a>(&self, ctx: &'a ropey::Rope) -> ropey::RopeSlice<'a> {
 		if self.active {
 			match self.mode {
 				SelectionMode::Char => ctx.slice(self.range_raw()),
@@ -38,7 +38,7 @@ impl Selection {
 		}
 	}
 
-	fn clone_ctx(&self, ctx: &ropey::Rope) -> ropey::Rope {
+	pub fn clone_ctx(&self, ctx: &ropey::Rope) -> ropey::Rope {
 		self.ctx(ctx).into()
 	}
 }

@@ -21,6 +21,7 @@ impl Prompt {
         self.comds.insert(Edit.name(), Rc::new(Edit));
         self.comds.insert(Undo.name(), Rc::new(Undo));
         self.comds.insert(Redo.name(), Rc::new(Redo));
+        self.comds.insert(Select.name(), Rc::new(Select));
         self.comds.insert(SwitchBuffer.name(), Rc::new(SwitchBuffer));
 	}
 
@@ -268,6 +269,17 @@ impl Command for Redo {
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
         if args.len() > 1 { return Err("too many args".to_owned()); }
         ed.active_buf_mut().redo();
+        Ok(())
+    }
+}
+
+/// starts a selection, might remove
+pub struct Select;
+impl Command for Select {
+    fn name(&self) -> &'static str { "v" }
+    fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
+        if args.len() > 1 { return Err("too many args".to_owned()); }
+        ed.active_buf_mut().selection_begin();
         Ok(())
     }
 }

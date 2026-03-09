@@ -2,17 +2,20 @@ use ratatui::{
 	Frame,
 	buffer::Buffer,
 	layout::{Constraint, Layout, Rect},
-	widgets::{Block, Clear, Paragraph, Widget}
+	widgets::{Block, Clear, Paragraph, Widget},
+	style::{Style, Color}
 };
 use crate::buffer::{VisualLine, ViewPort};
 use crate::Editor;
-use std::{borrow::Cow, fmt::Write};
+use crate::selection::Selection;
+use std::{borrow::Cow, fmt::Write, ops::Range};
 
 pub struct BufferWidget<'a> {
 	line_number_offset: u16,
 	rope: &'a ropey::Rope,
 	visual: &'a [VisualLine],
-	viewport: &'a ViewPort
+	viewport: &'a ViewPort,
+	selection: &'a Selection
 }
 
 impl<'a> BufferWidget<'a> {
@@ -22,6 +25,30 @@ impl<'a> BufferWidget<'a> {
 		let tot_off = vl.offset + cx;
 
 		tot_off + self.rope.line_to_char(vl.rope)
+	}
+
+	fn divide_and_style(&self, vl: &VisualLine, rope: usize) -> Vec<(Range<usize>, Style)> {
+		let default_style = Style::default();
+		let select_style  = Style::new().bg(Color::White).fg(Color::Black);
+		let select_range = self.selection.range_raw();
+
+		// handles the 3 selection cases, no select, all select, and partial
+		let res = if !self.selection.active 
+			|| select_range.start > rope + vl.len 
+			|| select_range.end < rope {
+			vec![(rope..(rope + vl.len), default_style)]
+		} else if select_range.start < rope && select_range.end > rope + vl.len {
+			vec![(rope..(rope + vl.len), select_style)]
+		} else {
+			vec![
+				(rope..select_range.start, default_style),
+				(select_range.start.max(rope)..select_range.end.min(rope + vl.len), select_style),
+				(select_range.end..(rope + vl.len), default_style)
+			]
+		};
+
+		// indexing into the rope with invalid ranges makes it exolode
+		res.into_iter().filter(|(range, _)| !range.is_empty()).collect()
 	}
 }
 
@@ -44,7 +71,7 @@ impl<'a> Widget for BufferWidget<'a> {
 		let mut ln_buf = String::new();
 		for (i, vl) in vls.iter().enumerate() {
 			let start = self.visual_to_rope(0, i);
-			let text = self.rope.slice(start..start + vl.len);
+
 			// print line numbers
 			if i == 0 || vls[i -1].rope != vl.rope {
 				// writing a char is faster than allocating a string
@@ -55,16 +82,25 @@ impl<'a> Widget for BufferWidget<'a> {
 					layout[0].y + i as u16,
 					&ln_buf,
 					self.line_number_offset as usize,
-					ratatui::style::Style::default(),
+					Style::default(),
 				);
 			}
-			// printing the text
-			buf.set_string(
-				layout[1].x,
-				layout[1].y + i as u16,
-				Cow::from(text), // use match text.as_str() if needed
-				ratatui::style::Style::default()
-			);
+			
+			// divide shit into styled chunks
+			let chunks = self.divide_and_style(&vl, start);
+			let mut x = layout[1].x;
+			for (range, style) in chunks {
+				// printing the text
+				let text = self.rope.slice(range);
+				let tmp = text.len_chars();
+				buf.set_string(
+					x,
+					layout[1].y + i as u16,
+					Cow::from(text), // use match text.as_str() if needed
+					style
+				);
+				x += tmp as u16;
+			}
 		}
 	}
 }
@@ -83,7 +119,8 @@ pub fn render_buffer(frame: &mut Frame, buf: &crate::buffer::Buffer, ed: &Editor
 			line_number_offset: ed.offset,
 			rope: &buf.lines,
 			visual: &buf.visual,
-			viewport: &buf.viewport
+			viewport: &buf.viewport,
+			selection: &buf.selection
 		},
 		outline_area
 	);

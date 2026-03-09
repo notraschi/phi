@@ -2,6 +2,7 @@
 * buffer struct - this stores the file info & content
 */
 use crate::history::History;
+use crate::selection::Selection;
 
 pub struct Buffer {
     pub lines: ropey::Rope,
@@ -14,6 +15,7 @@ pub struct Buffer {
 	// visual stuff 
 	pub visual : Vec<VisualLine>,
     pub viewport : ViewPort,
+	pub selection: Selection,
 }
 
 impl Buffer {
@@ -37,6 +39,7 @@ impl Buffer {
 			history: History::default(),
 			visual : vec![VisualLine::default()],
             viewport : ViewPort::new(w, h),
+			selection: Selection::default()
         };
         buf.build_visual_line();
 
@@ -44,7 +47,9 @@ impl Buffer {
     }
 
 	/// inserts a single char in the buffer
-    pub fn insert(&mut self, char : char) {
+    pub fn insert(&mut self, char: char) {
+		self.selection_end();
+		//
         self.history.update(&char, &self.lines, self.cs);
         // inserting
         self.lines.insert_char(self.cs, char);
@@ -56,6 +61,8 @@ impl Buffer {
 
 	/// deletes amt chars
     pub fn delete(&mut self, amt: usize) {
+		self.selection_end();
+
         // bounds check
         if self.cs < amt { return; }
 
@@ -86,6 +93,7 @@ impl Buffer {
 			Move::Exact(dir, amt) => self.cursor_mv_exact(dir, amt),
 			Move::Word(amt) => self.cursor_mv_word(amt)
 		}
+		self.selection_check_update();
 	}
 
 	/// this moves the cursor an amt amount of words
@@ -146,6 +154,8 @@ impl Buffer {
 		let tmp = self.lines.char_to_line(self.cs);
 		self.cs = self.lines.line_to_char(tmp);
 		self.cached_cx = 0;
+
+		self.selection_check_update();
 	}
 
 	/// moves the cursor to the end of the rope line
@@ -157,6 +167,8 @@ impl Buffer {
 			self.lines.len_chars()
 		};
 		self.cached_cx = self.get_cursor_pos().0 as usize;
+
+		self.selection_check_update();
 	}
 
     /// wrapper method to get the cursor (cx, cy) coords
@@ -174,6 +186,8 @@ impl Buffer {
 	/// fixes viewport and visual lines.
 	/// cursor is put back in the previews place.
     pub fn undo(&mut self) {
+		self.selection_end();
+
         self.history.stash(&self.lines, self.cs);
 
         let edit = self.history.undo();
@@ -187,7 +201,8 @@ impl Buffer {
 	/// redoes an edit.
 	/// possible only if undo command was just executed.
     pub fn redo(&mut self) {
-        //self.history.stash(&self.lines, self.cs);
+		self.selection_end();
+
         if let Some(edit) = self.history.redo() {
             self.lines = edit.text.clone();
             self.cs = edit.cs;
@@ -309,9 +324,29 @@ impl Buffer {
 		self.viewport.offset
     }
 
+	/// returns true is the buffers state isnt saved
     pub fn is_modified(&self) -> bool {
         self.history.is_dirty()
     }
+
+	/// starts a selection
+	pub fn selection_begin(&mut self) {
+		self.selection.active = true;
+		self.selection.anchor = self.cs;
+		self.selection.end = self.cs;
+	}
+
+	/// ends a selection
+	pub fn selection_end(&mut self) {
+		self.selection.active = false;
+	}
+
+	/// updates the selection if needed
+	pub fn selection_check_update(&mut self) {
+		if !self.selection.active { return; }
+
+		self.selection.end = self.cs;
+	}
 }
 
 #[derive(Default, Clone, Copy, Debug)]
