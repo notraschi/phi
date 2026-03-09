@@ -27,6 +27,7 @@ impl<'a> BufferWidget<'a> {
 		tot_off + self.rope.line_to_char(vl.rope)
 	}
 
+	// this is good, still i might move to do rendering in 2 steps, patching the style.
 	fn divide_and_style(&self, vl: &VisualLine, rope: usize) -> Vec<(Range<usize>, Style)> {
 		let default_style = Style::default();
 		let select_style  = Style::new().bg(Color::White).fg(Color::Black);
