@@ -60,15 +60,18 @@ impl Buffer {
     }
 
 	/// deletes amt chars
-    pub fn delete(&mut self, amt: usize) {
+    pub fn delete(&mut self, mut amt: usize, backspace: bool) {
 		self.selection_end();
-
         // bounds check
-        if self.cs < amt { return; }
-
-        // clever trick to simplify deleting chars: mv cursor first
-        self.cursor_mv(Move::Exact(Direction::Horiz, -(amt as i32)), false);
-        //
+		if backspace {
+			amt = self.cs.min(amt);
+			if amt == 0 { return; }
+			// clever trick to simplify deleting chars: mv cursor first
+			self.cursor_mv(Move::Exact(Direction::Horiz, -(amt as i32)), false);
+		} else {
+			amt = amt.min(self.lines.len_chars() - self.cs);
+			if amt == 0 { return; }
+		}
         self.lines.remove(self.cs .. self.cs + amt);
 		// visual line stuff
         if amt == 1 { self.update_visual_line(Option::None); }

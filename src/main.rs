@@ -122,12 +122,11 @@ impl Editor {
                     // key handling
                     KeyCode::Char(c) => buf.insert(c),
                     KeyCode::Enter => buf.insert('\n'),
-                    KeyCode::Backspace => buf.delete(1),
+                    KeyCode::Backspace => buf.delete(1, true),
+                    KeyCode::Delete => buf.delete(1, false),
                     
                     // enter command mode 
                     KeyCode::Esc => self.mode = Mode::Command,
-                    KeyCode::Delete => buf.undo(),
-                    KeyCode::PageUp => buf.redo(),
                     
                     // arrow keys
                     KeyCode::Up => buf.cursor_mv(Move::Exact(Direction::Vert, -1), true),
