@@ -100,6 +100,8 @@ impl Editor {
                 match code {
 					KeyCode::Left => buf.cursor_mv(Move::Word(-1), true),
 					KeyCode::Right => buf.cursor_mv(Move::Word(1), true),
+					KeyCode::Up => buf.viewport_mv(-1),
+					KeyCode::Down => buf.viewport_mv(1),
 					_ => {}
 				}
             }
@@ -136,6 +138,8 @@ impl Editor {
 
 					KeyCode::Home => buf.cursor_home(),
 					KeyCode::End => buf.cursor_end(),
+					KeyCode::PageUp => buf.viewport_mv(-1),
+					KeyCode::PageDown => buf.viewport_mv(1),
                     
                     _ => {} 
                 }

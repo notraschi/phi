@@ -327,6 +327,15 @@ impl Buffer {
 		self.viewport.offset
     }
 
+	/// moves the viewport offset by amt 
+	pub fn viewport_mv(&mut self, amt: i32) {
+		let new_vp_off = self.viewport.offset as i32 + amt;
+		if new_vp_off >= 0 && new_vp_off < self.visual.len() as i32 {
+			self.viewport.offset = new_vp_off as usize;
+		}
+		self.cursor_mv(Move::Exact(Direction::Vert, amt), true);
+	}
+
 	/// returns true is the buffers state isnt saved
     pub fn is_modified(&self) -> bool {
         self.history.is_dirty()
