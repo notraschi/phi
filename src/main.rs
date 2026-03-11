@@ -98,8 +98,8 @@ impl Editor {
                 code, ..
             } => {
                 match code {
-					KeyCode::Left => buf.cursor_mv(Move::Word(-1), true),
-					KeyCode::Right => buf.cursor_mv(Move::Word(1), true),
+					KeyCode::Left => buf.cursor_mv(Move::Word(-1)),
+					KeyCode::Right => buf.cursor_mv(Move::Word(1)),
 					KeyCode::Up => buf.viewport_mv(-1),
 					KeyCode::Down => buf.viewport_mv(1),
 					_ => {}
@@ -131,10 +131,10 @@ impl Editor {
                     KeyCode::Esc => self.mode = Mode::Command,
                     
                     // arrow keys
-                    KeyCode::Up => buf.cursor_mv(Move::Exact(Direction::Vert, -1), true),
-                    KeyCode::Down => buf.cursor_mv(Move::Exact(Direction::Vert, 1), true),
-                    KeyCode::Right => buf.cursor_mv(Move::Exact(Direction::Horiz, 1), true),
-                    KeyCode::Left => buf.cursor_mv(Move::Exact(Direction::Horiz, -1), true),
+                    KeyCode::Up => buf.cursor_mv(Move::Exact(Direction::Vert, -1)),
+                    KeyCode::Down => buf.cursor_mv(Move::Exact(Direction::Vert, 1)),
+                    KeyCode::Right => buf.cursor_mv(Move::Exact(Direction::Horiz, 1)),
+                    KeyCode::Left => buf.cursor_mv(Move::Exact(Direction::Horiz, -1)),
 
 					KeyCode::Home => buf.cursor_home(),
 					KeyCode::End => buf.cursor_end(),

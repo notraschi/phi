@@ -1,6 +1,7 @@
+use crate::buffer::Move;
 
 pub struct History {
-    pub timeline    : Vec<Edit>,
+    timeline	: Vec<Edit>,
     curr        : usize,
     saved       : usize,
     dirty       : bool,
@@ -9,14 +10,14 @@ pub struct History {
 impl History {
     /// updates the timeline
     pub fn update<E: EditAction>(&mut self, ea: &E, ctx: &ropey::Rope, cs: usize) {
-        self.dirty = true;
+        if ea.stains() { self.dirty = true; }
         if ea.should_stash() { self.stash(ctx, cs); }
         self.timeline.truncate(self.curr +1);
     }
 
     /// stashe a new edit, if meaningfull
     pub fn stash(&mut self, ctx: &ropey::Rope, cs: usize){
-        if ctx != &self.timeline[self.curr].text {
+        if !ctx.eq(&self.timeline[self.curr].text) {
             // trying this idea
             self.timeline.push(Edit::from(ctx.clone(), cs));
             self.curr += 1;
@@ -49,6 +50,11 @@ impl History {
         self.saved = self.curr;
 		self.dirty = false;
     }
+
+	#[cfg(test)]
+	pub fn tl_len(&self) -> usize {
+		self.timeline.len()
+	}
 }
 
 impl Default for History {
@@ -64,18 +70,38 @@ impl Default for History {
 
 pub trait EditAction {
     fn should_stash(&self) -> bool;
+
+	fn stains(&self) -> bool;
 }
 
 impl EditAction for char {
     fn should_stash(&self) -> bool {
         self.is_whitespace()
     }
+
+	fn stains(&self) -> bool {
+		true
+	}
 }
 
-impl<T: Fn() -> bool> EditAction for T {
+impl EditAction for bool {
     fn should_stash(&self) -> bool {
-        self()
+        *self
     }
+
+	fn stains(&self) -> bool {
+		*self
+	}
+}
+
+impl EditAction for Move {
+	fn should_stash(&self) -> bool {
+		true
+	}
+
+	fn stains(&self) -> bool {
+		false
+	}
 }
 
 #[derive(Default, Clone)]

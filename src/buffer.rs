@@ -31,7 +31,7 @@ impl Buffer {
 
 	/// opens a new buffer reading a specified file
     pub fn open(filename : String, ctx : ropey::Rope, w: usize, h: usize) -> Buffer {
-        let mut  buf = Buffer { 
+        let mut buf = Buffer { 
 			lines: ctx, 
 			filename,
 			cs: 0,
@@ -56,7 +56,7 @@ impl Buffer {
 		// visual lines
         self.update_visual_line(Some(char));
         // 
-        self.cursor_mv(Move::Exact(Direction::Horiz, 1), false);
+        self.cursor_mv_exact(Direction::Horiz, 1);
     }
 
 	/// deletes amt chars
@@ -67,7 +67,7 @@ impl Buffer {
 			amt = self.cs.min(amt);
 			if amt == 0 { return; }
 			// clever trick to simplify deleting chars: mv cursor first
-			self.cursor_mv(Move::Exact(Direction::Horiz, -(amt as i32)), false);
+			self.cursor_mv_exact(Direction::Horiz, -(amt as i32));
 		} else {
 			amt = amt.min(self.lines.len_chars() - self.cs);
 			if amt == 0 { return; }
@@ -81,7 +81,7 @@ impl Buffer {
             self.viewport.offset -= 1;
         }
         //
-        self.history.update(&|| true, &self.lines, self.cs); 
+        self.history.update(&true, &self.lines, self.cs); 
     }
 
 	/// fixes modified status and history
@@ -90,8 +90,9 @@ impl Buffer {
 	}
 
 	/// entry point to move the cursor
-	pub fn cursor_mv(&mut self, mv: Move, new_edit: bool) {
-        self.history.update(&|| new_edit, &self.lines, self.cs);
+	/// if called, stashes history, if you dont want this, call the mv_exact or mv_word
+	pub fn cursor_mv(&mut self, mv: Move) {
+        self.history.update(&mv, &self.lines, self.cs);
 		match mv {
 			Move::Exact(dir, amt) => self.cursor_mv_exact(dir, amt),
 			Move::Word(amt) => self.cursor_mv_word(amt)
@@ -333,7 +334,7 @@ impl Buffer {
 		if new_vp_off >= 0 && new_vp_off < self.visual.len() as i32 {
 			self.viewport.offset = new_vp_off as usize;
 		}
-		self.cursor_mv(Move::Exact(Direction::Vert, amt), true);
+		self.cursor_mv(Move::Exact(Direction::Vert, amt));
 	}
 
 	/// returns true is the buffers state isnt saved
@@ -413,11 +414,11 @@ mod tests {
     fn undo_test() {
         let mut buf = Buffer::new(20, 20);
         buf.undo();
-        assert_eq!(1, buf.history.timeline.len(), "no new item in timeline (no change)");
+        assert_eq!(1, buf.history.tl_len(), "no new item in timeline (no change)");
         buf.insert('c');
-        assert_eq!(1, buf.history.timeline.len(), "no stash, normal letter");
+        assert_eq!(1, buf.history.tl_len(), "no stash, normal letter");
         buf.insert(' ');
-        assert_eq!(2, buf.history.timeline.len(), "stash after a space");
+        assert_eq!(2, buf.history.tl_len(), "stash after a space");
         buf.insert('c');
         buf.undo();
         assert_eq!("c", buf.lines.to_string());
