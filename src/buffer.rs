@@ -412,6 +412,18 @@ mod tests {
     }
 
     #[test]
+    fn history_on_open_test() {
+        let ctx = ropey::Rope::from_str("text1\ntext2\n");
+        let mut buf = Buffer::open("name".to_string(), ctx.clone(), 5, 5);
+        assert_eq!(1, buf.history.tl_len());
+        buf.undo();
+        assert_eq!(ctx, buf.lines);
+        buf.insert('!');
+        buf.undo();
+        assert_eq!(ctx, buf.lines);
+    }
+
+    #[test]
     fn undo_test() {
         let mut buf = Buffer::new(20, 20);
         buf.undo();

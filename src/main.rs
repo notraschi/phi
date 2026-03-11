@@ -124,6 +124,11 @@ impl Editor {
                     // key handling
                     KeyCode::Char(c) => buf.insert(c),
                     KeyCode::Enter => buf.insert('\n'),
+                    KeyCode::Tab => {
+                        for _ in 0..4 {
+                            buf.insert(' ');
+                        }
+                    },
                     KeyCode::Backspace => buf.delete(1, true),
                     KeyCode::Delete => buf.delete(1, false),
                     
@@ -138,8 +143,8 @@ impl Editor {
 
 					KeyCode::Home => buf.cursor_home(),
 					KeyCode::End => buf.cursor_end(),
-					KeyCode::PageUp => buf.viewport_mv(-1),
-					KeyCode::PageDown => buf.viewport_mv(1),
+					KeyCode::PageUp => buf.viewport_mv(-5),
+					KeyCode::PageDown => buf.viewport_mv(5),
                     
                     _ => {} 
                 }
