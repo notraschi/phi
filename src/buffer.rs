@@ -22,7 +22,8 @@ impl Buffer {
 
 	/// creates a new empty buffer with a default name
     pub fn new(w: usize, h: usize) -> Buffer {
-        Buffer::open("new-file.md".to_owned(), 
+        Buffer::open(
+			"new-file.md".to_owned(), 
             ropey::Rope::new(),
             w,
 			h
@@ -30,13 +31,13 @@ impl Buffer {
     }
 
 	/// opens a new buffer reading a specified file
-    pub fn open(filename : String, ctx : ropey::Rope, w: usize, h: usize) -> Buffer {
+    pub fn open(filename: String, ctx: ropey::Rope, w: usize, h: usize) -> Buffer {
         let mut buf = Buffer { 
-			lines: ctx, 
+			lines: ctx.clone(), 
 			filename,
 			cs: 0,
 			cached_cx : 0,
-			history: History::default(),
+			history: History::from(ctx),
 			visual : vec![VisualLine::default()],
             viewport : ViewPort::new(w, h),
 			selection: Selection::default()

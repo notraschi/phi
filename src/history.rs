@@ -1,5 +1,8 @@
 use crate::buffer::Move;
 
+/// history impl is timeline of saved (recorded) states (Edits).
+/// if the current state is to be recorded, it is added in the timeline
+/// the first item in the timeline should be the buffers state upon opening the file.
 pub struct History {
     timeline	: Vec<Edit>,
     curr        : usize,
@@ -66,6 +69,17 @@ impl Default for History {
             dirty: false,
         }
     }
+}
+
+impl From<ropey::Rope> for History {
+	fn from(initial: ropey::Rope) -> Self {
+		Self {
+            timeline: vec![Edit { text: initial, cs: 0}],
+            curr: 0,
+            saved: 0,
+            dirty: false,
+        }
+	}
 }
 
 pub trait EditAction {
