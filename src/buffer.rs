@@ -58,6 +58,7 @@ impl Buffer {
         self.update_visual_line(Some(char));
         // 
         self.cursor_mv_exact(Direction::Horiz, 1);
+		_ = self.viewport_fix_offset(Option::None);
     }
 
 	/// deletes amt chars
@@ -77,11 +78,8 @@ impl Buffer {
 		// visual line stuff
         if amt == 1 { self.update_visual_line(Option::None); }
         else { self.build_visual_line(); }
-        // fix offset on a corner case
-        if self.viewport.offset == self.visual.len() {
-            self.viewport.offset -= 1;
-        }
-        //
+        
+		_ = self.viewport_fix_offset(Option::None);
         self.history.update(&true, &self.lines, self.cs); 
     }
 
@@ -92,12 +90,15 @@ impl Buffer {
 
 	/// entry point to move the cursor
 	/// if called, stashes history, if you dont want this, call the mv_exact or mv_word
+    /// also, only this fn updates the viewport
 	pub fn cursor_mv(&mut self, mv: Move) {
         self.history.update(&mv, &self.lines, self.cs);
 		match mv {
 			Move::Exact(dir, amt) => self.cursor_mv_exact(dir, amt),
 			Move::Word(amt) => self.cursor_mv_word(amt)
 		}
+		// fix viewport
+		_ = self.viewport_fix_offset(Option::None);
 		self.selection_check_update();
 	}
 
@@ -111,43 +112,37 @@ impl Buffer {
 				amt -= inc;
 			}
 		}
-		_ = self.viewport_fix_offset(Option::None);
 	}
 
 	/// this is used to move the cursor an exact amt of spaces.
     /// **NOTE**: aside from undo actions (and the tiny if on delete), 
-    /// only this fn updates the viewport
     fn cursor_mv_exact(&mut self, dir: Direction, amt: i32) {
         match dir {
             // has to cache the max cx
             Direction::Vert => {
-                let (_, cy) = self.get_cursor_pos();
+                let new_cy = self.rope_to_visual(self.cs).1 as i32 + amt;
                 // check top/bottom bounds
-				if (cy + amt + self.viewport.offset as i32) < 0 
-                    || (cy + amt + self.viewport.offset as i32) >= self.visual.len() as i32 
-                { 
+				if new_cy < 0 || new_cy >= self.visual.len() as i32 {
                     return; 
                 }
-                let len = self.visual[(cy + amt + self.viewport.offset as i32) as usize].len;
-				// special case: the last line dont have a newline char
-				let end = if cy + amt + 1 == self.visual.len() as i32 { len } else { 1.max(len) -1 };
-				let diff = self.viewport.offset as i32 - self.viewport_fix_offset(Some(cy + amt)) as i32;
+				// special case: last line doesnt have a newline char
+				let end = if new_cy + 1 == self.visual.len() as i32 {
+					self.visual[new_cy as usize].len
+				} else {
+					1.max(len) -1
+				};
 				self.cs = self.visual_to_rope(
 					end.min(self.cached_cx),
-					(cy + amt + diff) as usize
+					new_cy as usize - self.viewport.offset
 				);
             },
             Direction::Horiz => {
                 // check bounds
-                if self.cs as i32 + amt < 0 ||
-                    self.cs as i32 + amt > self.lines.len_chars() as i32
-                    // special case: deleting a char at the end of rope
-                {
+                if self.cs as i32 + amt < 0
+                    || self.cs as i32 + amt > self.lines.len_chars() as i32 {
                     return;
                 } 
                 self.cs = (amt + self.cs as i32) as usize;
-                // fix viewport
-                _ = self.viewport_fix_offset(Option::None);
                 // update the cached cx
                 self.cached_cx = self.get_cursor_pos().0 as usize;
             },
@@ -261,7 +256,7 @@ impl Buffer {
         let (cx, cy) = self.rope_to_visual(self.cs);
         match c {
             Some(c) => {
-                if c == '\n' {
+                if c == '\n' || c == '\t' {
                     self.build_visual_line();
                 } else if self.viewport.width >= self.visual[cy].len + 1 {
                     self.visual[cy].len += 1;
