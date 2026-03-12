@@ -274,23 +274,43 @@ impl Buffer {
     /// completely rebuilds self.visual.
     /// *can* deal with terminal copy/paste correctly
     fn build_visual_line(&mut self) {
+		let tab_width = 4;
         self.visual = self.lines.lines()
             .enumerate()
             .flat_map(|(i, line)| {
-                
                 let mut rope_len = line.len_chars();
                 let mut vec = vec![];
                 let mut offset = 0;
 
-                while rope_len > 0 {
-                    let new_vis = VisualLine {
-                        offset, len : self.viewport.width.min(rope_len), rope : i
-                    };
-                    vec.push(new_vis);
-                    
-                    rope_len -= new_vis.len;
-                    offset   += self.viewport.width;
-                }
+				while rope_len > 0 {
+					let mut vis_width = 0;
+					let mut char_len = 0;
+
+					// calc line len handling tabs
+					for ch in line.slice(offset..).chars() {
+						let w = if ch == '\t' {
+							tab_width - (vis_width % tab_width)
+						} else { 1 };
+
+						// reaching end of screen
+						if vis_width + w > self.viewport.width {
+							break;
+						}
+						vis_width += w;
+						char_len += 1;
+
+						if char_len == rope_len { break; }
+						assert!(char_len < rope_len);
+					}
+
+					// edge case: a single char exceed width
+					if char_len == 0 { char_len = 1; }
+
+					vec.push(VisualLine { offset, len: char_len, rope: i });
+
+					rope_len -= char_len;
+					offset += char_len;
+				}
                 // edge case
                 if line.len_chars() == 0 {
                     vec.push( VisualLine { offset: 0, len: 0, rope: i } );
@@ -398,12 +418,14 @@ mod tests {
 
 	#[test]
 	fn tab_handle_test() {
-		let mut buf = Buffer::new(20, 20);
-		buf.lines 	= ropey::Rope::from("\t5");
+		let mut buf = Buffer::new(5, 5);
+		buf.lines 	= ropey::Rope::from("\t56789");
 		buf.build_visual_line();
 		buf.cursor_end();
-		assert_eq!(2, buf.cs);
-		assert_eq!(5, buf.get_cursor_pos().0);
+		assert_eq!(6, buf.cs);
+		assert_eq!(1, buf.get_cursor_pos().1);
+		buf.insert('\t');
+		assert_eq!(2, buf.get_cursor_pos().1);
 	}
 
     #[test]
