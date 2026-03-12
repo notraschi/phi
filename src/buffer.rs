@@ -129,7 +129,7 @@ impl Buffer {
 				let end = if new_cy + 1 == self.visual.len() as i32 {
 					self.visual[new_cy as usize].len
 				} else {
-					1.max(len) -1
+					1.max(self.visual[new_cy as usize].len) -1
 				};
 				self.cs = self.visual_to_rope(
 					end.min(self.cached_cx),
@@ -395,6 +395,16 @@ pub enum Move {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+	#[test]
+	fn tab_handle_test() {
+		let mut buf = Buffer::new(20, 20);
+		buf.lines 	= ropey::Rope::from("\t5");
+		buf.build_visual_line();
+		buf.cursor_end();
+		assert_eq!(2, buf.cs);
+		assert_eq!(5, buf.get_cursor_pos().0);
+	}
 
     #[test]
     fn modified_indicator_test() {
