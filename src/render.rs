@@ -19,10 +19,25 @@ pub struct BufferWidget<'a> {
 }
 
 impl<'a> BufferWidget<'a> {
-	fn visual_to_rope(&self, cx : usize, cy : usize) -> usize {
+	/// copied from Buffer
+	fn visual_to_rope(&self, visual_cx : usize, cy : usize) -> usize {
 		let vl = self.visual[cy + self.viewport.offset];
+		
 		// total offset from the beginning of the rope line
-		let tot_off = vl.offset + cx;
+		// let tot_off = vl.offset + visual_cx;
+		let tab_width = 4;
+		let mut curr_col = 0;
+		let char_cx = self.rope.line(self.visual[cy].rope)
+			.slice(vl.offset..vl.offset + vl.len)
+			.chars()
+			.take_while(|ch| { 
+				curr_col += if *ch == '\t' {
+					tab_width - (curr_col % tab_width)
+				} else { 1 };
+				curr_col <= visual_cx
+			})
+			.count();
+		let tot_off = vl.offset + char_cx;
 
 		tot_off + self.rope.line_to_char(vl.rope)
 	}
@@ -97,6 +112,7 @@ impl<'a> Widget for BufferWidget<'a> {
 				buf.set_string(
 					x,
 					layout[1].y + i as u16,
+					// this is gonna be a pain to put tabs into..
 					Cow::from(text), // use match text.as_str() if needed
 					style
 				);
