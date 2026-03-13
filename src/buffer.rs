@@ -115,7 +115,6 @@ impl Buffer {
 	}
 
 	/// this is used to move the cursor an exact amt of spaces.
-    /// **NOTE**: aside from undo actions (and the tiny if on delete), 
     fn cursor_mv_exact(&mut self, dir: Direction, amt: i32) {
         match dir {
             // has to cache the max cx
@@ -215,10 +214,9 @@ impl Buffer {
     /// converts between index in the Rope to indexes (col, row).
     /// panics if indexes cant be found.
     /// 
-    /// **NOTE**: cy is the absolute value, unrealated to the viewport!
+    /// **NOTE**: cy is the absolute value, unrealated to the viewport
 	fn rope_to_visual(&self, cs : usize) -> (usize, usize) {
 
-        // get first visual line referring to corresponding rope line
 		let rope = self.lines.char_to_line(cs);
         // always at least one visual line is used to represent one rope line
         let mut cy = match self.visual[rope .. ].iter()
@@ -228,25 +226,53 @@ impl Buffer {
 		};
 
 		// find actual correct VisualLine
-		let mut cx: usize = cs - self.lines.line_to_char(rope);
+		let mut cx = cs - self.lines.line_to_char(rope);
 		while cy +1 < self.visual.len() && self.visual[cy].len <= cx {
 			// decrement cx so it points to the remaining space
 			cx -= self.visual[cy].len;
 			cy += 1;
 		}
-		(cx, cy)		
+		// accounting for tabs
+		(self.visual_cx(&self.visual[cy], cx), cy)		
 	}
 
     /// convert (col, row) indexes to the corresponding Rope index.
     ///
-    /// **NOTE**: cy is the relative to the viewport
-	pub fn visual_to_rope(&self, cx : usize, cy : usize) -> usize {
+    /// **NOTE**: cy is relative to the viewport
+	pub fn visual_to_rope(&self, visual_cx : usize, cy : usize) -> usize {
 		let vl = self.visual[cy + self.viewport.offset];
 		
 		// total offset from the beginning of the rope line
-		let tot_off = vl.offset + cx;
+		// let tot_off = vl.offset + visual_cx;
+		let tab_width = 4;
+		let mut curr_col = 0;
+		let char_cx = self.lines.line(self.visual[cy].rope)
+			.slice(vl.offset..vl.offset + vl.len)
+			.chars()
+			.take_while(|ch| { 
+				curr_col += if *ch == '\t' {
+					tab_width - (curr_col % tab_width)
+				} else { 1 };
+				curr_col <= visual_cx
+			})
+			.count();
+		let tot_off = vl.offset + char_cx;
 
 		tot_off + self.lines.line_to_char(vl.rope)
+	}
+
+	/// returns the visual x coord of the cursor accounting for tabs
+	fn visual_cx(&self, vl: &VisualLine, char_cx: usize) -> usize {
+		let tab_width = 4;
+		self.lines.line(vl.rope)
+			.slice(vl.offset..vl.offset + char_cx)
+			.chars()
+			.fold(0, |mut acc, c| {
+				acc += if c == '\t' {
+					tab_width - (acc % tab_width)
+				} else { 1 };
+				acc
+			})
 	}
 
     /// update visual line after the insertion/deletion of a *single* char.
@@ -426,6 +452,12 @@ mod tests {
 		assert_eq!(1, buf.get_cursor_pos().1);
 		buf.insert('\t');
 		assert_eq!(2, buf.get_cursor_pos().1);
+		//
+		buf.resize(20, 20);
+		buf.lines = ropey::Rope::from("\t234\n\t\t789");
+		buf.build_visual_line();
+		assert_eq!((9, 1), buf.rope_to_visual(8));
+		assert_eq!(8, buf.visual_to_rope(9, 1))
 	}
 
     #[test]
