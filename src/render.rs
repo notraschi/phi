@@ -66,6 +66,23 @@ impl<'a> BufferWidget<'a> {
 		// indexing into the rope with invalid ranges makes it exolode
 		res.into_iter().filter(|(range, _)| !range.is_empty()).collect()
 	}
+
+	/// crappy tab expansion for the rendering..
+	fn expand_tabs(&self, slice: String, mut vis_col: usize) -> String { 
+		let tab_size = 4;
+		slice.chars()
+			.flat_map(|ch| {
+				if ch == '\t' {
+					let spaces = tab_size - (vis_col % tab_size);
+					vis_col += spaces;
+					std::iter::repeat(' ').take(spaces).collect::<Vec<_>>()
+				} else {
+					vis_col += 1;
+					vec![ch]
+				}
+			})
+			.collect()
+	}
 }
 
 impl<'a> Widget for BufferWidget<'a> {
@@ -113,7 +130,8 @@ impl<'a> Widget for BufferWidget<'a> {
 					x,
 					layout[1].y + i as u16,
 					// this is gonna be a pain to put tabs into..
-					Cow::from(text), // use match text.as_str() if needed
+					//Cow::from(text), // use match text.as_str() if needed
+					self.expand_tabs(text.to_string(), (x - layout[1].x) as usize),
 					style
 				);
 				x += tmp as u16;
