@@ -126,13 +126,13 @@ impl Buffer {
                 }
 				// special case: last line doesnt have a newline char
 				let end = if new_cy + 1 == self.visual.len() as i32 {
-					self.visual[new_cy as usize].len
+					self.visual[new_cy as usize].vis_width
 				} else {
-					1.max(self.visual[new_cy as usize].len) -1
+					1.max(self.visual[new_cy as usize].vis_width) -1
 				};
 				self.cs = self.visual_to_rope(
 					end.min(self.cached_cx),
-					new_cy as usize - self.viewport.offset
+					new_cy as usize
 				);
             },
             Direction::Horiz => {
@@ -238,15 +238,15 @@ impl Buffer {
 
     /// convert (col, row) indexes to the corresponding Rope index.
     ///
-    /// **NOTE**: cy is relative to the viewport
+    /// **NOTE**: cy is absolute
 	pub fn visual_to_rope(&self, visual_cx : usize, cy : usize) -> usize {
-		let vl = self.visual[cy + self.viewport.offset];
+		let vl = self.visual[cy];
 		
 		// total offset from the beginning of the rope line
 		// let tot_off = vl.offset + visual_cx;
 		let tab_width = 4;
 		let mut curr_col = 0;
-		let char_cx = self.lines.line(self.visual[cy].rope)
+		let char_cx = self.lines.line(vl.rope)
 			.slice(vl.offset..vl.offset + vl.len)
 			.chars()
 			.take_while(|ch| { 
@@ -286,12 +286,14 @@ impl Buffer {
                     self.build_visual_line();
                 } else if self.viewport.width >= self.visual[cy].len + 1 {
                     self.visual[cy].len += 1;
+                    self.visual[cy].vis_width += 1;
                 } else { self.build_visual_line(); }
             },
             None => {
                 // no idea why but the +1 is necessary
                 if self.visual[cy].len > cx + 1 && cx > 0 {
                     self.visual[cy].len -= 1;
+                    self.visual[cy].vis_width -= 1;
                 } else { self.build_visual_line(); }
             }
         }
@@ -309,37 +311,35 @@ impl Buffer {
                 let mut offset = 0;
 
 				while rope_len > 0 {
-					let mut vis_width = 0;
-					let mut char_len = 0;
+                    let mut vis_width = 0;
+					let mut char_len = line.slice(offset..)
+                        .chars()
+                        .scan(0, |width, ch| {
+                            let w = match ch {
+                                '\t' => tab_width - (vis_width % tab_width),
+                                _ => 1
+                            };
+                            if *width + w > self.viewport.width { return None; }
 
-					// calc line len handling tabs
-					for ch in line.slice(offset..).chars() {
-						let w = if ch == '\t' {
-							tab_width - (vis_width % tab_width)
-						} else { 1 };
+                            *width += w;
+                            vis_width = *width;
 
-						// reaching end of screen
-						if vis_width + w > self.viewport.width {
-							break;
-						}
-						vis_width += w;
-						char_len += 1;
-
-						if char_len == rope_len { break; }
-						assert!(char_len < rope_len);
-					}
-
+                            Some(())
+                        })
+                        .take(rope_len)
+                        .count();
+                                        
 					// edge case: a single char exceed width
 					if char_len == 0 { char_len = 1; }
 
-					vec.push(VisualLine { offset, len: char_len, rope: i });
+					vec.push(VisualLine { offset, len: char_len, rope: i, vis_width });
 
 					rope_len -= char_len;
 					offset += char_len;
 				}
                 // edge case
                 if line.len_chars() == 0 {
-                    vec.push( VisualLine { offset: 0, len: 0, rope: i } );
+                    vec.push(VisualLine { offset: 0, len: 0, rope: i, vis_width: 0 });
                 }
                 vec
             })
@@ -409,6 +409,7 @@ pub struct VisualLine {
 	pub offset   : usize,
 	pub len  : usize,
 	pub rope : usize,
+    vis_width: usize,
 }
 
 /// struct that dictates the way visual lines are printed to fit
@@ -441,6 +442,20 @@ pub enum Move {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cursor_mv_exact_test() {
+        let mut buf = Buffer::new(5, 5);
+        buf.lines = ropey::Rope::from_str("c\ni\na\no");
+        buf.build_visual_line();
+        buf.cs = buf.visual_to_rope(0, 1);
+        buf.viewport.offset = 1;
+        assert_eq!((0, 0), buf.get_cursor_pos());
+        assert_eq!((0, 1), buf.rope_to_visual(buf.cs));
+        buf.cursor_mv(Move::Exact(Direction::Vert, -1));
+        assert_eq!(0, buf.viewport.offset);
+        assert_eq!((0, 0), buf.rope_to_visual(buf.cs));
+    }
 
 	#[test]
 	fn tab_handle_test() {

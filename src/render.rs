@@ -8,7 +8,7 @@ use ratatui::{
 use crate::buffer::{VisualLine, ViewPort};
 use crate::Editor;
 use crate::selection::Selection;
-use std::{borrow::Cow, fmt::Write, ops::Range};
+use std::{fmt::Write, ops::Range};
 
 pub struct BufferWidget<'a> {
 	line_number_offset: u16,
@@ -19,7 +19,7 @@ pub struct BufferWidget<'a> {
 }
 
 impl<'a> BufferWidget<'a> {
-	/// copied from Buffer
+	/// using relative cy, unlike Buffer
 	fn visual_to_rope(&self, visual_cx : usize, cy : usize) -> usize {
 		let vl = self.visual[cy + self.viewport.offset];
 		
@@ -27,7 +27,7 @@ impl<'a> BufferWidget<'a> {
 		// let tot_off = vl.offset + visual_cx;
 		let tab_width = 4;
 		let mut curr_col = 0;
-		let char_cx = self.rope.line(self.visual[cy].rope)
+		let char_cx = self.rope.line(vl.rope)
 			.slice(vl.offset..vl.offset + vl.len)
 			.chars()
 			.take_while(|ch| { 
