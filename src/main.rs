@@ -17,6 +17,7 @@ use ratatui::DefaultTerminal;
 use std::io;
 
 use command::*;
+use render::BufferState;
 use buffer::*;
 
 /*
@@ -26,6 +27,7 @@ use buffer::*;
 struct Editor {
     // buffer stuff
     bufs: Vec<Buffer>,
+	buf_states: Vec<BufferState>,
     active_buf: usize,
     // misc
     mode: Mode,
@@ -44,6 +46,7 @@ impl Default for Editor {
 		prompt.load_commands();
         Self {
 			bufs: Default::default(), 
+			buf_states: Default::default(),
             active_buf: Default::default(),
             mode: Default::default(), 
             alive: Default::default(), 
@@ -61,6 +64,7 @@ impl Editor {
     fn new_buf(&mut self) {
         let (w, h) = self.get_size();
         self.bufs.push(Buffer::new(w, h));
+		self.buf_states.push(BufferState::default());
         self.active_buf = self.bufs.len() -1;
     }
 
@@ -197,7 +201,7 @@ impl Editor {
 					);
                 }
             }
-            _ => {}
+            _ => {},
         }
         Ok(())
     } 
@@ -208,9 +212,10 @@ impl Editor {
     fn run(&mut self, mut terminal: DefaultTerminal) -> io::Result<()> {
         while self.alive {
             terminal.draw(|frame| {
-				let buf = self.active_buf();
+				let buf = &self.bufs[self.active_buf];
+				let buf_state = &mut self.buf_states[self.active_buf];
 
-				render::render_buffer(frame, buf, &self);
+				render::render_buffer(frame, buf, buf_state, self.active_buf, self.offset);
 
 				match self.mode {
 					Mode::Command => {

@@ -2,13 +2,14 @@ use ratatui::{
 	Frame,
 	buffer::Buffer,
 	layout::{Constraint, Layout, Rect},
-	widgets::{Block, Clear, Paragraph, Widget},
+	widgets::{Block, Clear, Paragraph, Widget, StatefulWidget},
 	style::{Style, Color}
 };
 use crate::buffer::{VisualLine, ViewPort};
 use crate::Editor;
 use crate::selection::Selection;
 use std::{fmt::Write, ops::Range};
+use std::hash::{Hash, Hasher};
 
 pub struct BufferWidget<'a> {
 	line_number_offset: u16,
@@ -68,7 +69,7 @@ impl<'a> BufferWidget<'a> {
 	}
 
 	/// crappy tab expansion for the rendering..
-	fn expand_tabs(&self, slice: String, mut vis_col: usize) -> String { 
+	fn expand_tabs(&self, slice: ropey::RopeSlice<'_>, mut vis_col: usize) -> String { 
 		let tab_size = 4;
 		slice.chars()
 			.flat_map(|ch| {
@@ -131,7 +132,7 @@ impl<'a> Widget for BufferWidget<'a> {
 					layout[1].y + i as u16,
 					// this is gonna be a pain to put tabs into..
 					//Cow::from(text), // use match text.as_str() if needed
-					self.expand_tabs(text.to_string(), (x - layout[1].x) as usize),
+					self.expand_tabs(text, (x - layout[1].x) as usize),
 					style
 				);
 				x += tmp as u16;
@@ -140,24 +141,142 @@ impl<'a> Widget for BufferWidget<'a> {
 	}
 }
 
-pub fn render_buffer(frame: &mut Frame, buf: &crate::buffer::Buffer, ed: &Editor) {
+impl<'a> StatefulWidget for BufferWidget<'a> {
+	type State = BufferState;
+
+	fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+		let now = BufferState::from(&self);
+		// visual lines to render
+		let diff = now.diff(&state, self.viewport.offset);
+
+		// render
+		// layout to house line numbers and text
+		let layout = Layout::default()
+			.direction(ratatui::layout::Direction::Horizontal)
+			.constraints([
+				Constraint::Length(self.line_number_offset),
+				Constraint::Min(5)
+			])
+			.split(area);
+		let vp_start = self.viewport.offset;
+		let vp_end   = self.viewport.offset + self.viewport.height;
+		// visual lines inside viewport
+		let vls = &self.visual[vp_start..vp_end.min(self.visual.len())];
+		let mut ln_buf = String::new();
+		let mut rendered = vec![];
+		for (i, vl) in vls.iter().enumerate() {
+			// print line numbers
+			if i == 0 || vls[i -1].rope != vl.rope {
+				// writing a char is faster than allocating a string
+				ln_buf.clear();
+				write!(&mut ln_buf, "{}", vl.rope).unwrap();
+				buf.set_stringn(
+					layout[0].x,
+					layout[0].y + i as u16,
+					&ln_buf,
+					self.line_number_offset as usize,
+					Style::default(),
+				);
+			}
+
+			//
+			let start = self.visual_to_rope(0, i);
+			// divide shit into styled chunks
+			let chunks = self.divide_and_style(&vl, start);
+			let mut x = layout[1].x;
+			for (range, style) in chunks {
+				// printing the text
+				let slice = self.rope.slice(range);
+				let text_width = slice.len_chars();
+
+				let text = match diff.contains(&i) {
+					true => self.expand_tabs(slice, (x - layout[1].x) as usize),
+					false => state.text[i].clone()
+				};
+
+				buf.set_string(
+					x,
+					layout[1].y + i as u16,
+					&text,
+					style
+				);
+				x += text_width as u16;
+				rendered.push(text);
+			}
+		}
+		state.update(&self, rendered);
+	}
+}
+
+/// stores hash of the previews visible lines
+/// *not* updated by Buffer, updated by render calls
+#[derive(Default, PartialEq, Eq, Debug)]
+pub struct BufferState {
+	hashes: Vec<u64>,
+	text: Vec<String>
+}
+
+impl BufferState {
+	fn from(buf: &BufferWidget) -> Self {
+		let mut bs = Self::default();
+		// nothing was rendered yet
+		bs.update(buf, vec![]);
+		bs
+	}
+	
+	fn update(&mut self, buf: &BufferWidget, rendered: Vec<String>) {
+		let start = buf.viewport.offset;
+		let end = (start + buf.viewport.height).min(buf.visual.len());
+
+		self.hashes = buf.visual[start..end].iter()
+			.enumerate()
+			.map(|(i, vl)| {
+				let st = buf.visual_to_rope(0, i);
+				buf.rope.slice(st..st + vl.len)
+			})
+			.map(|rs| {
+				let mut h = ahash::AHasher::default();
+				rs.hash(&mut h);
+				h.finish()
+			})
+			.collect();
+		self.text = rendered;
+	}
+
+	fn diff(&self, other: &BufferState, vp_off: usize) -> Vec<usize> {
+		self.hashes.iter()
+			.enumerate()
+			.filter(|(i, h)| other.hashes.get(*i).is_none() || other.hashes[*i] != **h)
+			.map(|(i, _)| i + vp_off)
+			.collect()
+	}
+}
+
+pub fn render_buffer(
+	frame: &mut Frame,
+	buf: &crate::buffer::Buffer,
+	buf_state: &mut BufferState,
+	active_buf: usize,
+	ed_offset: u16
+) {
 	let outline = Block::bordered().title(
-			"<".to_owned() + &ed.active_buf.to_string() + ": " + &buf.filename
+			"<".to_owned() + &active_buf.to_string() + ": " + &buf.filename
 			+ match buf.is_modified() { true => "*", false => "" }
 			+ ">"
 		)
 		.title_alignment(ratatui::layout::Alignment::Right);
 	let outline_area = outline.inner(frame.area());
 	frame.render_widget(outline, frame.area());
-	frame.render_widget(
+	frame.render_stateful_widget(
 		BufferWidget {
-			line_number_offset: ed.offset,
+			line_number_offset: ed_offset,
 			rope: &buf.lines,
 			visual: &buf.visual,
 			viewport: &buf.viewport,
 			selection: &buf.selection
 		},
-		outline_area
+		outline_area,
+		buf_state
 	);
 }
 

@@ -439,10 +439,27 @@ pub enum Move {
 	Word(i32)
 }
 
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
+/*
+	#[test]
+	fn buf_state_update_test() {
+		let mut buf = Buffer::new(5, 5);
+		buf.lines = ropey::Rope::from_str("ciao1come2stai3");
+		buf.build_visual_line();
+		
+		let mut bs = BufferState::from(&buf);
+		let bs1 = BufferState::from(&buf);
+		assert_eq!(bs, bs1);	
 
+		buf.lines = ropey::Rope::from_str("line1\nlinestai3");
+		bs.update(&buf);
+		assert_ne!(bs, bs1);
+	}
+*/
     #[test]
     fn cursor_mv_exact_test() {
         let mut buf = Buffer::new(5, 5);

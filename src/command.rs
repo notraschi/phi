@@ -220,6 +220,7 @@ impl Command for Edit {
             w, h
         ));
         ed.active_buf = ed.bufs.len() -1; 
+		ed.buf_states.push(crate::render::BufferState::default());
 
         Ok(())
     }
