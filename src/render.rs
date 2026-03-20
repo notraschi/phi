@@ -8,7 +8,7 @@ use ratatui::{
 use crate::buffer::{VisualLine, ViewPort};
 use crate::Editor;
 use crate::selection::Selection;
-use std::{fmt::Write, ops::Range};
+use std::{collections::HashSet, fmt::Write, ops::Range};
 use std::hash::{Hash, Hasher};
 
 pub struct BufferWidget<'a> {
@@ -145,11 +145,9 @@ impl<'a> StatefulWidget for BufferWidget<'a> {
 	type State = BufferState;
 
 	fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-		let now = BufferState::from(&self);
-		// visual lines to render
-		let diff = now.diff(&state, self.viewport.offset);
+		// get diff from past render
+		let diff = BufferState::from(&self).diff(&state);
 
-		// render
 		// layout to house line numbers and text
 		let layout = Layout::default()
 			.direction(ratatui::layout::Direction::Horizontal)
@@ -208,7 +206,8 @@ impl<'a> StatefulWidget for BufferWidget<'a> {
 	}
 }
 
-/// stores hash of the previews visible lines
+/// stores hash of the previews visible lines,
+/// stores the litteral lines printed previewsly
 /// *not* updated by Buffer, updated by render calls
 #[derive(Default, PartialEq, Eq, Debug)]
 pub struct BufferState {
@@ -243,11 +242,11 @@ impl BufferState {
 		self.text = rendered;
 	}
 
-	fn diff(&self, other: &BufferState, vp_off: usize) -> Vec<usize> {
+	fn diff(&self, other: &BufferState) -> HashSet<usize> {
 		self.hashes.iter()
 			.enumerate()
 			.filter(|(i, h)| other.hashes.get(*i).is_none() || other.hashes[*i] != **h)
-			.map(|(i, _)| i + vp_off)
+			.map(|(i, _)| i)
 			.collect()
 	}
 }
