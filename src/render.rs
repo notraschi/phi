@@ -8,7 +8,7 @@ use ratatui::{
 use crate::buffer::{VisualLine, ViewPort};
 use crate::Editor;
 use crate::selection::Selection;
-use std::{fmt::Write, ops::Range};
+use std::ops::Range;
 
 pub struct BufferWidget<'a> {
 	line_number_offset: u16,
@@ -68,7 +68,7 @@ impl<'a> BufferWidget<'a> {
 	}
 
 	/// crappy tab expansion for the rendering..
-	fn expand_tabs(&self, slice: String, mut vis_col: usize) -> String { 
+	fn expand_tabs(&self, slice: ropey::RopeSlice<'_>, mut vis_col: usize) -> String { 
 		let tab_size = 4;
 		slice.chars()
 			.flat_map(|ch| {
@@ -126,14 +126,10 @@ impl<'a> Widget for BufferWidget<'a> {
 			for (range, style) in chunks {
 				// printing the text
 				let text = self.rope.slice(range);
-				let tmp = text.len_chars();
-				buf.set_string(
-					x,
-					y,
-					self.expand_tabs(text.to_string(), (x - layout[1].x) as usize),
-					style
-				);
-				x += tmp as u16;
+				let text = self.expand_tabs(text, (x - layout[1].x) as usize);
+				let text_width = text.len();
+				buf.set_string(x, y, text, style);
+				x += text_width as u16;
 			}
 		}
 	}
