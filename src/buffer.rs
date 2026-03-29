@@ -58,6 +58,7 @@ impl Buffer {
         self.update_visual_line(Some(char));
         // 
         self.cursor_mv_exact(Direction::Horiz, 1);
+		_ = self.viewport_fix_offset(Option::None);
     }
 
 	/// deletes amt chars
@@ -77,11 +78,8 @@ impl Buffer {
 		// visual line stuff
         if amt == 1 { self.update_visual_line(Option::None); }
         else { self.build_visual_line(); }
-        // fix offset on a corner case
-        if self.viewport.offset == self.visual.len() {
-            self.viewport.offset -= 1;
-        }
-        //
+        
+		_ = self.viewport_fix_offset(Option::None);
         self.history.update(&true, &self.lines, self.cs); 
     }
 
@@ -92,12 +90,15 @@ impl Buffer {
 
 	/// entry point to move the cursor
 	/// if called, stashes history, if you dont want this, call the mv_exact or mv_word
+    /// also, only this fn updates the viewport
 	pub fn cursor_mv(&mut self, mv: Move) {
         self.history.update(&mv, &self.lines, self.cs);
 		match mv {
 			Move::Exact(dir, amt) => self.cursor_mv_exact(dir, amt),
 			Move::Word(amt) => self.cursor_mv_word(amt)
 		}
+		// fix viewport
+		_ = self.viewport_fix_offset(Option::None);
 		self.selection_check_update();
 	}
 
@@ -111,43 +112,36 @@ impl Buffer {
 				amt -= inc;
 			}
 		}
-		_ = self.viewport_fix_offset(Option::None);
 	}
 
 	/// this is used to move the cursor an exact amt of spaces.
-    /// **NOTE**: aside from undo actions (and the tiny if on delete), 
-    /// only this fn updates the viewport
     fn cursor_mv_exact(&mut self, dir: Direction, amt: i32) {
         match dir {
             // has to cache the max cx
             Direction::Vert => {
-                let (_, cy) = self.get_cursor_pos();
+                let new_cy = self.rope_to_visual(self.cs).1 as i32 + amt;
                 // check top/bottom bounds
-				if (cy + amt + self.viewport.offset as i32) < 0 
-                    || (cy + amt + self.viewport.offset as i32) >= self.visual.len() as i32 
-                { 
+				if new_cy < 0 || new_cy >= self.visual.len() as i32 {
                     return; 
                 }
-                let len = self.visual[(cy + amt + self.viewport.offset as i32) as usize].len;
-				// special case: the last line dont have a newline char
-				let end = if cy + amt + 1 == self.visual.len() as i32 { len } else { 1.max(len) -1 };
-				let diff = self.viewport.offset as i32 - self.viewport_fix_offset(Some(cy + amt)) as i32;
+				// special case: last line doesnt have a newline char
+				let end = if new_cy + 1 == self.visual.len() as i32 {
+					self.visual[new_cy as usize].vis_width
+				} else {
+					1.max(self.visual[new_cy as usize].vis_width) -1
+				};
 				self.cs = self.visual_to_rope(
 					end.min(self.cached_cx),
-					(cy + amt + diff) as usize
+					new_cy as usize
 				);
             },
             Direction::Horiz => {
                 // check bounds
-                if self.cs as i32 + amt < 0 ||
-                    self.cs as i32 + amt > self.lines.len_chars() as i32
-                    // special case: deleting a char at the end of rope
-                {
+                if self.cs as i32 + amt < 0
+                    || self.cs as i32 + amt > self.lines.len_chars() as i32 {
                     return;
                 } 
                 self.cs = (amt + self.cs as i32) as usize;
-                // fix viewport
-                _ = self.viewport_fix_offset(Option::None);
                 // update the cached cx
                 self.cached_cx = self.get_cursor_pos().0 as usize;
             },
@@ -220,10 +214,9 @@ impl Buffer {
     /// converts between index in the Rope to indexes (col, row).
     /// panics if indexes cant be found.
     /// 
-    /// **NOTE**: cy is the absolute value, unrealated to the viewport!
+    /// **NOTE**: cy is the absolute value, unrealated to the viewport
 	fn rope_to_visual(&self, cs : usize) -> (usize, usize) {
 
-        // get first visual line referring to corresponding rope line
 		let rope = self.lines.char_to_line(cs);
         // always at least one visual line is used to represent one rope line
         let mut cy = match self.visual[rope .. ].iter()
@@ -233,25 +226,53 @@ impl Buffer {
 		};
 
 		// find actual correct VisualLine
-		let mut cx: usize = cs - self.lines.line_to_char(rope);
+		let mut cx = cs - self.lines.line_to_char(rope);
 		while cy +1 < self.visual.len() && self.visual[cy].len <= cx {
 			// decrement cx so it points to the remaining space
 			cx -= self.visual[cy].len;
 			cy += 1;
 		}
-		(cx, cy)		
+		// accounting for tabs
+		(self.visual_cx(&self.visual[cy], cx), cy)		
 	}
 
     /// convert (col, row) indexes to the corresponding Rope index.
     ///
-    /// **NOTE**: cy is the relative to the viewport
-	pub fn visual_to_rope(&self, cx : usize, cy : usize) -> usize {
-		let vl = self.visual[cy + self.viewport.offset];
+    /// **NOTE**: cy is absolute
+	pub fn visual_to_rope(&self, visual_cx : usize, cy : usize) -> usize {
+		let vl = self.visual[cy];
 		
 		// total offset from the beginning of the rope line
-		let tot_off = vl.offset + cx;
+		// let tot_off = vl.offset + visual_cx;
+		let tab_width = 4;
+		let mut curr_col = 0;
+		let char_cx = self.lines.line(vl.rope)
+			.slice(vl.offset..vl.offset + vl.len)
+			.chars()
+			.take_while(|ch| { 
+				curr_col += if *ch == '\t' {
+					tab_width - (curr_col % tab_width)
+				} else { 1 };
+				curr_col <= visual_cx
+			})
+			.count();
+		let tot_off = vl.offset + char_cx;
 
 		tot_off + self.lines.line_to_char(vl.rope)
+	}
+
+	/// returns the visual x coord of the cursor accounting for tabs
+	fn visual_cx(&self, vl: &VisualLine, char_cx: usize) -> usize {
+		let tab_width = 4;
+		self.lines.line(vl.rope)
+			.slice(vl.offset..vl.offset + char_cx)
+			.chars()
+			.fold(0, |mut acc, c| {
+				acc += if c == '\t' {
+					tab_width - (acc % tab_width)
+				} else { 1 };
+				acc
+			})
 	}
 
     /// update visual line after the insertion/deletion of a *single* char.
@@ -261,16 +282,18 @@ impl Buffer {
         let (cx, cy) = self.rope_to_visual(self.cs);
         match c {
             Some(c) => {
-                if c == '\n' {
+                if c == '\n' || c == '\t' {
                     self.build_visual_line();
-                } else if self.viewport.width >= self.visual[cy].len + 1 {
+                } else if self.viewport.width >= self.visual[cy].vis_width + 1 {
                     self.visual[cy].len += 1;
+                    self.visual[cy].vis_width += 1;
                 } else { self.build_visual_line(); }
             },
             None => {
                 // no idea why but the +1 is necessary
                 if self.visual[cy].len > cx + 1 && cx > 0 {
                     self.visual[cy].len -= 1;
+                    self.visual[cy].vis_width -= 1;
                 } else { self.build_visual_line(); }
             }
         }
@@ -279,26 +302,44 @@ impl Buffer {
     /// completely rebuilds self.visual.
     /// *can* deal with terminal copy/paste correctly
     fn build_visual_line(&mut self) {
+		let tab_width = 4;
         self.visual = self.lines.lines()
             .enumerate()
             .flat_map(|(i, line)| {
-                
                 let mut rope_len = line.len_chars();
                 let mut vec = vec![];
                 let mut offset = 0;
 
-                while rope_len > 0 {
-                    let new_vis = VisualLine {
-                        offset, len : self.viewport.width.min(rope_len), rope : i
-                    };
-                    vec.push(new_vis);
-                    
-                    rope_len -= new_vis.len;
-                    offset   += self.viewport.width;
-                }
+				while rope_len > 0 {
+                    let mut vis_width = 0;
+					let mut char_len = line.slice(offset..)
+                        .chars()
+                        .scan(0, |width, ch| {
+                            let w = match ch {
+                                '\t' => tab_width - (vis_width % tab_width),
+                                _ => 1
+                            };
+                            if *width + w > self.viewport.width { return None; }
+
+                            *width += w;
+                            vis_width = *width;
+
+                            Some(())
+                        })
+                        .take(rope_len)
+                        .count();
+                                        
+					// edge case: a single char exceed width
+					if char_len == 0 { char_len = 1; }
+
+					vec.push(VisualLine { offset, len: char_len, rope: i, vis_width });
+
+					rope_len -= char_len;
+					offset += char_len;
+				}
                 // edge case
                 if line.len_chars() == 0 {
-                    vec.push( VisualLine { offset: 0, len: 0, rope: i } );
+                    vec.push(VisualLine { offset: 0, len: 0, rope: i, vis_width: 0 });
                 }
                 vec
             })
@@ -368,6 +409,7 @@ pub struct VisualLine {
 	pub offset   : usize,
 	pub len  : usize,
 	pub rope : usize,
+    vis_width: usize,
 }
 
 /// struct that dictates the way visual lines are printed to fit
@@ -400,6 +442,38 @@ pub enum Move {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cursor_mv_exact_test() {
+        let mut buf = Buffer::new(5, 5);
+        buf.lines = ropey::Rope::from_str("c\ni\na\no");
+        buf.build_visual_line();
+        buf.cs = buf.visual_to_rope(0, 1);
+        buf.viewport.offset = 1;
+        assert_eq!((0, 0), buf.get_cursor_pos());
+        assert_eq!((0, 1), buf.rope_to_visual(buf.cs));
+        buf.cursor_mv(Move::Exact(Direction::Vert, -1));
+        assert_eq!(0, buf.viewport.offset);
+        assert_eq!((0, 0), buf.rope_to_visual(buf.cs));
+    }
+
+	#[test]
+	fn tab_handle_test() {
+		let mut buf = Buffer::new(5, 5);
+		buf.lines 	= ropey::Rope::from("\t56789");
+		buf.build_visual_line();
+		buf.cursor_end();
+		assert_eq!(6, buf.cs);
+		assert_eq!(1, buf.get_cursor_pos().1);
+		buf.insert('\t');
+		assert_eq!(2, buf.get_cursor_pos().1);
+		//
+		buf.resize(20, 20);
+		buf.lines = ropey::Rope::from("\t234\n\t\t789");
+		buf.build_visual_line();
+		assert_eq!((9, 1), buf.rope_to_visual(8));
+		assert_eq!(8, buf.visual_to_rope(9, 1))
+	}
 
     #[test]
     fn modified_indicator_test() {

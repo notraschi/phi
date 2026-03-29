@@ -8,7 +8,7 @@ use ratatui::{
 use crate::buffer::{VisualLine, ViewPort};
 use crate::Editor;
 use crate::selection::Selection;
-use std::{borrow::Cow, fmt::Write, ops::Range};
+use std::ops::Range;
 
 pub struct BufferWidget<'a> {
 	line_number_offset: u16,
@@ -19,10 +19,25 @@ pub struct BufferWidget<'a> {
 }
 
 impl<'a> BufferWidget<'a> {
-	fn visual_to_rope(&self, cx : usize, cy : usize) -> usize {
+	/// using relative cy, unlike Buffer
+	fn visual_to_rope(&self, visual_cx : usize, cy : usize) -> usize {
 		let vl = self.visual[cy + self.viewport.offset];
+		
 		// total offset from the beginning of the rope line
-		let tot_off = vl.offset + cx;
+		// let tot_off = vl.offset + visual_cx;
+		let tab_width = 4;
+		let mut curr_col = 0;
+		let char_cx = self.rope.line(vl.rope)
+			.slice(vl.offset..vl.offset + vl.len)
+			.chars()
+			.take_while(|ch| { 
+				curr_col += if *ch == '\t' {
+					tab_width - (curr_col % tab_width)
+				} else { 1 };
+				curr_col <= visual_cx
+			})
+			.count();
+		let tot_off = vl.offset + char_cx;
 
 		tot_off + self.rope.line_to_char(vl.rope)
 	}
@@ -51,6 +66,23 @@ impl<'a> BufferWidget<'a> {
 		// indexing into the rope with invalid ranges makes it exolode
 		res.into_iter().filter(|(range, _)| !range.is_empty()).collect()
 	}
+
+	/// crappy tab expansion for the rendering..
+	fn expand_tabs(&self, slice: ropey::RopeSlice<'_>, mut vis_col: usize) -> String { 
+		let tab_size = 4;
+		slice.chars()
+			.flat_map(|ch| {
+				if ch == '\t' {
+					let spaces = tab_size - (vis_col % tab_size);
+					vis_col += spaces;
+					std::iter::repeat(' ').take(spaces).collect::<Vec<_>>()
+				} else {
+					vis_col += 1;
+					vec![ch]
+				}
+			})
+			.collect()
+	}
 }
 
 impl<'a> Widget for BufferWidget<'a> {
@@ -69,38 +101,35 @@ impl<'a> Widget for BufferWidget<'a> {
 		// visual lines inside viewport
 		let vls = &self.visual[vp_start..vp_end.min(self.visual.len())];
 		// line number buffer to not allocate with a to_string every frame
-		let mut ln_buf = String::new();
+		// let mut ln_buf = String::new();
 		for (i, vl) in vls.iter().enumerate() {
-			let start = self.visual_to_rope(0, i);
 
 			// print line numbers
 			if i == 0 || vls[i -1].rope != vl.rope {
 				// writing a char is faster than allocating a string
-				ln_buf.clear();
-				write!(&mut ln_buf, "{}", vl.rope).unwrap();
+				// ln_buf.clear();
+				// write!(&mut ln_buf, "{}", vl.rope).unwrap();
 				buf.set_stringn(
 					layout[0].x,
 					layout[0].y + i as u16,
-					&ln_buf,
+					vl.rope.to_string(),
 					self.line_number_offset as usize,
 					Style::default(),
 				);
 			}
 			
 			// divide shit into styled chunks
+			let start = self.visual_to_rope(0, i);
 			let chunks = self.divide_and_style(&vl, start);
 			let mut x = layout[1].x;
+			let y = layout[1].y + i as u16;
 			for (range, style) in chunks {
 				// printing the text
 				let text = self.rope.slice(range);
-				let tmp = text.len_chars();
-				buf.set_string(
-					x,
-					layout[1].y + i as u16,
-					Cow::from(text), // use match text.as_str() if needed
-					style
-				);
-				x += tmp as u16;
+				let text = self.expand_tabs(text, (x - layout[1].x) as usize);
+				let text_width = text.len();
+				buf.set_string(x, y, text, style);
+				x += text_width as u16;
 			}
 		}
 	}

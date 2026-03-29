@@ -57,7 +57,6 @@ impl Default for Editor {
 
 
 impl Editor {
-
     /// adds an empty buffer to the editor
     fn new_buf(&mut self) {
         let (w, h) = self.get_size();
@@ -124,11 +123,7 @@ impl Editor {
                     // key handling
                     KeyCode::Char(c) => buf.insert(c),
                     KeyCode::Enter => buf.insert('\n'),
-                    KeyCode::Tab => {
-                        for _ in 0..4 {
-                            buf.insert(' ');
-                        }
-                    },
+					KeyCode::Tab => buf.insert('\t'),
                     KeyCode::Backspace => buf.delete(1, true),
                     KeyCode::Delete => buf.delete(1, false),
                     
