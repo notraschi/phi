@@ -101,36 +101,35 @@ impl<'a> Widget for BufferWidget<'a> {
 		// visual lines inside viewport
 		let vls = &self.visual[vp_start..vp_end.min(self.visual.len())];
 		// line number buffer to not allocate with a to_string every frame
-		let mut ln_buf = String::new();
+		// let mut ln_buf = String::new();
 		for (i, vl) in vls.iter().enumerate() {
-			let start = self.visual_to_rope(0, i);
 
 			// print line numbers
 			if i == 0 || vls[i -1].rope != vl.rope {
 				// writing a char is faster than allocating a string
-				ln_buf.clear();
-				write!(&mut ln_buf, "{}", vl.rope).unwrap();
+				// ln_buf.clear();
+				// write!(&mut ln_buf, "{}", vl.rope).unwrap();
 				buf.set_stringn(
 					layout[0].x,
 					layout[0].y + i as u16,
-					&ln_buf,
+					vl.rope.to_string(),
 					self.line_number_offset as usize,
 					Style::default(),
 				);
 			}
 			
 			// divide shit into styled chunks
+			let start = self.visual_to_rope(0, i);
 			let chunks = self.divide_and_style(&vl, start);
 			let mut x = layout[1].x;
+			let y = layout[1].y + i as u16;
 			for (range, style) in chunks {
 				// printing the text
 				let text = self.rope.slice(range);
 				let tmp = text.len_chars();
 				buf.set_string(
 					x,
-					layout[1].y + i as u16,
-					// this is gonna be a pain to put tabs into..
-					//Cow::from(text), // use match text.as_str() if needed
+					y,
 					self.expand_tabs(text.to_string(), (x - layout[1].x) as usize),
 					style
 				);

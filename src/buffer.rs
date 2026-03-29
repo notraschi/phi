@@ -284,7 +284,7 @@ impl Buffer {
             Some(c) => {
                 if c == '\n' || c == '\t' {
                     self.build_visual_line();
-                } else if self.viewport.width >= self.visual[cy].len + 1 {
+                } else if self.viewport.width >= self.visual[cy].vis_width + 1 {
                     self.visual[cy].len += 1;
                     self.visual[cy].vis_width += 1;
                 } else { self.build_visual_line(); }
