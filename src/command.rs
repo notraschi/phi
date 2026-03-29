@@ -281,7 +281,10 @@ impl Command for Select {
     fn name(&self) -> &'static str { "v" }
     fn run(&self, args: Vec<String>, ed : &mut Editor) -> Result<(), String> {
         if args.len() > 1 { return Err("too many args".to_owned()); }
-        ed.active_buf_mut().selection_begin();
+		match ed.active_buf().selection.active {
+			true => ed.active_buf_mut().selection_end(),
+			false => ed.active_buf_mut().selection_begin(),
+		}
         Ok(())
     }
 }
