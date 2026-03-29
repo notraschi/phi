@@ -1,4 +1,4 @@
-use crate::{buffer::Buffer, Editor};
+use crate::{Editor, buffer::Buffer, render::BufferState};
 use std::{collections::HashMap, collections::VecDeque, rc::Rc};
 
 /*
@@ -236,6 +236,7 @@ impl Command for SwitchBuffer {
         if args.len() == 1 {
             let (w, h) = ed.get_size();
             ed.bufs.push(Buffer::new(w, h));
+			ed.buf_states.push(BufferState::default());
             ed.active_buf = ed.bufs.len() -1; 
             return Ok(());
         }
